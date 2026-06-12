@@ -61,3 +61,60 @@ jobs:
         id: deployment
         # actions/deploy-pages@v4
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+
+      - name: Purge README image cache
+        # koki-develop/hub-purge-action@v1.0.3
+        uses: koki-develop/hub-purge-action@c608e39abca23026c802f44643cffccc123a826f
+        continue-on-error: true
+        with:
+          repository: ${{ github.repository }}
+          branch: main
+          path: README.md
+
+      - name: Purge README picture source cache
+        env:
+          README_REPOSITORY: ${{ github.repository }}
+          README_BRANCH: main
+          README_PATH: README.md
+        run: |
+          node <<'NODE'
+          const repository = process.env.README_REPOSITORY ?? "";
+          const branch = process.env.README_BRANCH ?? "main";
+          const readmePath = process.env.README_PATH ?? "README.md";
+
+          if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+            throw new Error(`invalid repository: ${repository}`);
+          }
+
+          const encodePath = (value) => value.split("/").map(encodeURIComponent).join("/");
+          const readmeUrl = `https://github.com/${encodePath(repository)}/blob/${encodePath(branch)}/${encodePath(readmePath)}`;
+          const response = await fetch(readmeUrl, { headers: { "User-Agent": "bemstat-cache-purge" } });
+          if (!response.ok) {
+            throw new Error(`failed to fetch README page: ${response.status} ${response.statusText}`);
+          }
+
+          const html = await response.text();
+          const urls = new Set();
+          const attrRe = /<(?:img|source)\b[^>]+\s(?:src|srcset)="([^"]+)"/gi;
+          for (const match of html.matchAll(attrRe)) {
+            const value = match[1].replaceAll("&amp;", "&");
+            for (const candidate of value.split(",")) {
+              const url = candidate.trim().split(/\s+/)[0];
+              if (url.startsWith("https://camo.githubusercontent.com/")) {
+                urls.add(url);
+              }
+            }
+          }
+
+          if (urls.size === 0) {
+            console.log("No README camo image URLs found.");
+          }
+
+          for (const url of urls) {
+            console.log(`Purging: ${url}`);
+            const purge = await fetch(url, { method: "PURGE" });
+            if (!purge.ok) {
+              throw new Error(`failed to purge ${url}: ${purge.status} ${purge.statusText}`);
+            }
+          }
+          NODE
