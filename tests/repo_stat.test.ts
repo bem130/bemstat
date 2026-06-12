@@ -16,6 +16,7 @@ import {
   sortedRepositoryMetrics,
   writeCsv,
 } from "../repo_stat.ts";
+import { writeStaticCharts } from "../rendering/charts.ts";
 import { emptyFileStats, type LineKind } from "../languages/types.ts";
 
 function bucket(overrides = {}) {
@@ -23,6 +24,14 @@ function bucket(overrides = {}) {
     files: 1,
     ...emptyFileStats(),
     ...overrides,
+  };
+}
+
+function pngSize(path: string): { width: number; height: number } {
+  const bytes = readFileSync(path);
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
   };
 }
 
@@ -164,6 +173,38 @@ function bucket(overrides = {}) {
     assert.match(csv, /^unknown_extension,,,.zzz,,1,1,/m);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+{
+  const root = mkdtempSync(join(resolve("work"), "chart-font-"));
+  const longRepo = "bem130/WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
+  try {
+    const written = writeStaticCharts({
+      owners: ["bem130", "neknaj"],
+      byOwner: [{ name: "bem130", files: 1, lines: 100, bytes: 100, source: 100 }],
+      byRepository: [{ fullName: longRepo, files: 1, lines: 1_234_567_890_123, bytes: 100, source: 1_234_567_890_123 }],
+      byExtension: [{ name: ".very-long-extension-name", files: 1, lines: 100, bytes: 100, source: 100 }],
+      byLanguage: [{ name: "TypeScriptWithAVeryLongName", files: 1, lines: 100, bytes: 100, source: 100 }],
+      byContentKind: [{ name: "source", files: 1, lines: 100, bytes: 100 }],
+    }, root);
+    assert.equal(written.length, 20);
+
+    const svg = readFileSync(join(root, "stat", "images", "top-repositories-by-source-lines-dark.svg"), "utf8");
+    assert.match(svg, /<svg [^>]*width="1080"/);
+    assert.match(svg, /<clipPath id="labelClip">/);
+    assert.match(svg, /<rect x="40" y="0" width="656"/);
+    assert.match(svg, /\.label \{ font-size: 46px; font-weight: 700;/);
+    assert.match(svg, /\.value \{ font-size: 38px; font-weight: 700;/);
+    assert.match(svg, /<text x="40" y="\d+" class="label" clip-path="url\(#labelClip\)">bem130\/WWWWWWWWW\.\.\.<\/text>/);
+    assert.doesNotMatch(svg, new RegExp(longRepo));
+    assert.match(svg, /<text x="1040" y="\d+" text-anchor="end" class="value">1,234,567,890,123<\/text>/);
+
+    const size = pngSize(join(root, "stat", "images", "top-repositories-by-source-lines-dark.png"));
+    assert.equal(size.width, 1080);
+    assert.ok(size.height > 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 }
 
