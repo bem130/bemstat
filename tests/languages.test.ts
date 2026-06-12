@@ -17,6 +17,7 @@ function lines(input: string): TextLine[] {
   const source = [
     "//: This function is documented.",
     "//:| neplg2:test",
+    "//: exit_code: 0",
     "//: stdin: 1",
     "//:| ```neplg2",
     "//:| add 1 2",
@@ -28,7 +29,7 @@ function lines(input: string): TextLine[] {
   const stats = neplClassifier.classify("src/sample.nepl", lines(`${source}\n`), resolveLanguage("src/sample.nepl").context);
 
   assert.equal(stats.doc_comment, 1);
-  assert.equal(stats.test, 5);
+  assert.equal(stats.test, 6);
   assert.equal(stats.testCases, 1);
   assert.equal(stats.source, 2);
   assert.equal(stats.comment, 1);
@@ -50,6 +51,7 @@ function lines(input: string): TextLine[] {
     "# Guide",
     "",
     "neplg2:test",
+    "exit_code: 0",
     "```neplg2",
     "print 1",
     "```",
@@ -58,7 +60,7 @@ function lines(input: string): TextLine[] {
 
   assert.equal(stats.document, 1);
   assert.equal(stats.blank, 1);
-  assert.equal(stats.test, 4);
+  assert.equal(stats.test, 5);
   assert.equal(stats.testCases, 1);
 }
 

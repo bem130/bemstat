@@ -205,13 +205,16 @@
       gap: 8px;
     }
 
-    .image-actions {
+    .image-actions,
+    .data-files {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+      align-items: center;
     }
 
-    button {
+    button,
+    .data-file {
       min-height: 34px;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -221,10 +224,20 @@
       font-size: 0.84rem;
       font-weight: 600;
       padding: 6px 10px;
+    }
+
+    button {
       cursor: pointer;
     }
 
-    button:hover {
+    .data-file {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+
+    button:hover,
+    .data-file:hover {
       border-color: var(--blue);
       color: var(--blue);
     }
@@ -287,6 +300,17 @@
     </section>
 
     <section>
+      <h2>Data files</h2>
+      <div class="notice-panel data-files">
+        <a class="data-file" href="stat/repo_stat.json">repo_stat.json</a>
+        <button type="button" data-copy-url="stat/repo_stat.json">Copy JSON URL</button>
+        <a class="data-file" href="stat/repo_stat.csv">repo_stat.csv</a>
+        <button type="button" data-copy-url="stat/repo_stat.csv">Copy CSV URL</button>
+      </div>
+      <div class="meta" id="copyStatus" aria-live="polite"></div>
+    </section>
+
+    <section>
       <h2>Interactive chart</h2>
       <div class="controls">
         <label>
@@ -345,7 +369,6 @@
     <section>
       <h2>Static images</h2>
       <div class="image-grid" id="staticImages"></div>
-      <div class="meta" id="copyStatus" aria-live="polite"></div>
     </section>
 
     <section class="split">

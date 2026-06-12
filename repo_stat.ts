@@ -394,9 +394,6 @@ function sortedBucketEntries(map: Map<string, BucketStats>): Array<[string, Buck
   return Array.from(map.entries()).sort((a, b) => {
     if (isUnknownName(a[0]) !== isUnknownName(b[0])) return isUnknownName(a[0]) ? 1 : -1;
     if (b[1].source !== a[1].source) return b[1].source - a[1].source;
-    if (b[1].bytes !== a[1].bytes) return b[1].bytes - a[1].bytes;
-    if (b[1].lines !== a[1].lines) return b[1].lines - a[1].lines;
-    if (b[1].files !== a[1].files) return b[1].files - a[1].files;
     return a[0].localeCompare(b[0]);
   });
 }
@@ -559,7 +556,7 @@ async function buildStat(args: Args) {
     byOwner: sortedBucketEntries(byOwner).map(([name, stats]) => bucketPayload(name, stats)),
     byRepository: Array.from(byRepository.values()).sort((a, b) => {
       if (a.status !== b.status) return a.status === "error" ? 1 : -1;
-      return b.source - a.source || b.lines - a.lines || b.bytes - a.bytes || a.fullName.localeCompare(b.fullName);
+      return b.source - a.source || a.fullName.localeCompare(b.fullName);
     }),
     byExtension: sortedBucketEntries(byExtension).map(([name, stats]) => bucketPayload(name, stats)),
     byLanguage: sortedBucketEntries(byLanguage).map(([name, stats]) => bucketPayload(name, stats)),

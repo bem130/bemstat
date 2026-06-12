@@ -2,7 +2,7 @@ import { addLine, addTestCase, type FileStats, type LineKind, stripLineEnding, t
 
 export type DoctestState = "document" | "await_fence" | "in_fence";
 
-const DOCTEST_META_RE = /^\s*(stdin|argv|stdout|stderr|ret|diag_code|diag_codes|diag_span|diag_spans)\s*:\s*(.*?)\s*$/;
+const DOCTEST_META_RE = /^\s*(stdin|argv|stdout|stderr|ret|exit_code|diag_code|diag_codes|diag_span|diag_spans)\s*:\s*(.*?)\s*$/;
 const DOCTEST_RE = /^\s*neplg2:test(?:\[[^\]]+\])?\s*$/;
 const DOCTEST_FENCE_OPEN_RE = /^\s*```(?:neplg2|nepl)\s*$/;
 const DOCTEST_FENCE_CLOSE_RE = /^\s*```\s*$/;
