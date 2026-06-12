@@ -3,6 +3,7 @@ export type LineKind =
   | "source"
   | "doc_comment"
   | "document"
+  | "data"
   | "test"
   | "comment"
   | "other";
@@ -12,6 +13,7 @@ export const CONTENT_KINDS: readonly LineKind[] = [
   "source",
   "doc_comment",
   "document",
+  "data",
   "test",
   "comment",
   "other",
@@ -30,6 +32,7 @@ export type FileStats = {
   source: number;
   doc_comment: number;
   document: number;
+  data: number;
   test: number;
   comment: number;
   other: number;
@@ -73,6 +76,7 @@ export function emptyFileStats(): FileStats {
     source: 0,
     doc_comment: 0,
     document: 0,
+    data: 0,
     test: 0,
     comment: 0,
     other: 0,
@@ -88,6 +92,7 @@ export function emptyKindRecord(): Record<LineKind, number> {
     source: 0,
     doc_comment: 0,
     document: 0,
+    data: 0,
     test: 0,
     comment: 0,
     other: 0,
@@ -124,7 +129,9 @@ export function splitPath(path: string): string[] {
 }
 
 export function isTestPath(path: string): boolean {
-  return splitPath(path).some((part) => part === "tests" || part === "test");
+  const parts = splitPath(path);
+  const basename = parts[parts.length - 1] ?? "";
+  return parts.some((part) => part === "tests" || part === "test") || /(^|[._-])(test|spec)([._-]|$)/i.test(basename);
 }
 
 export function stripLineEnding(text: string): string {

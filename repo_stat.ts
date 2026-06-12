@@ -169,7 +169,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function printUsage(): void {
-  console.log("Usage: node --experimental-strip-types repo_metrics.ts [options]");
+  console.log("Usage: node --experimental-strip-types repo_stat.ts [options]");
   console.log("");
   console.log("Options:");
   console.log("  --owners <a,b>              Owners to scan (default: bem130,neknaj)");
@@ -218,7 +218,7 @@ async function fetchSpecificRepo(fullName: string): Promise<GitHubRepo> {
 function githubHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "bemstat-metrics",
+    "User-Agent": "bemstat-stat",
     "X-GitHub-Api-Version": "2022-11-28",
   };
   if (process.env.GITHUB_TOKEN) {
@@ -265,13 +265,30 @@ function run(cmd: string[], cwd: string): string {
   return proc.stdout ?? "";
 }
 
+function runWithRetry(cmd: string[], cwd: string, attempts = 3): string {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return run(cmd, cwd);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) sleepMs(1000 * attempt);
+    }
+  }
+  throw lastError;
+}
+
+function sleepMs(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 function ensureRepo(repo: GitHubRepo, workdir: string): string {
   const ownerDir = resolve(workdir, repo.owner.login);
   const repoDir = resolve(ownerDir, repo.name);
   mkdirSync(ownerDir, { recursive: true });
 
   if (!existsSync(repoDir)) {
-    run(["git", "clone", "--depth", "1", "--branch", repo.default_branch, repo.clone_url, repoDir], process.cwd());
+    runWithRetry(["git", "clone", "--depth", "1", "--branch", repo.default_branch, repo.clone_url, repoDir], process.cwd());
     return repoDir;
   }
 
@@ -280,7 +297,7 @@ function ensureRepo(repo: GitHubRepo, workdir: string): string {
   }
 
   run(["git", "-C", repoDir, "remote", "set-url", "origin", repo.clone_url], process.cwd());
-  run(["git", "-C", repoDir, "fetch", "--depth", "1", "origin", repo.default_branch], process.cwd());
+  runWithRetry(["git", "-C", repoDir, "fetch", "--depth", "1", "origin", repo.default_branch], process.cwd());
   run(["git", "-C", repoDir, "checkout", "-f", "FETCH_HEAD"], process.cwd());
   return repoDir;
 }
@@ -338,6 +355,7 @@ function accumulateBucket(dest: BucketStats, src: FileStats): void {
   dest.source += src.source;
   dest.doc_comment += src.doc_comment;
   dest.document += src.document;
+  dest.data += src.data;
   dest.test += src.test;
   dest.comment += src.comment;
   dest.other += src.other;
@@ -374,11 +392,17 @@ function ensureContentKindBucket(map: Map<LineKind, ContentKindStats>, key: Line
 
 function sortedBucketEntries(map: Map<string, BucketStats>): Array<[string, BucketStats]> {
   return Array.from(map.entries()).sort((a, b) => {
+    if (isUnknownName(a[0]) !== isUnknownName(b[0])) return isUnknownName(a[0]) ? 1 : -1;
+    if (b[1].source !== a[1].source) return b[1].source - a[1].source;
     if (b[1].bytes !== a[1].bytes) return b[1].bytes - a[1].bytes;
     if (b[1].lines !== a[1].lines) return b[1].lines - a[1].lines;
     if (b[1].files !== a[1].files) return b[1].files - a[1].files;
     return a[0].localeCompare(b[0]);
   });
+}
+
+function isUnknownName(name: string): boolean {
+  return name === "unknown" || name === "(no_ext)" || name.startsWith("unknown:");
 }
 
 function bucketPayload(name: string, stats: BucketStats): { name: string } & BucketStats {
@@ -389,7 +413,7 @@ function contentKindPayload(name: LineKind, stats: ContentKindStats): { name: Li
   return { name, ...stats };
 }
 
-async function buildMetrics(args: Args) {
+async function buildStat(args: Args) {
   const repos = await selectRepos(args);
   const totals = emptyBucketStats();
   const byOwner = new Map<string, BucketStats>();
@@ -533,7 +557,10 @@ async function buildMetrics(args: Args) {
     })),
     totals,
     byOwner: sortedBucketEntries(byOwner).map(([name, stats]) => bucketPayload(name, stats)),
-    byRepository: Array.from(byRepository.values()).sort((a, b) => b.bytes - a.bytes || b.lines - a.lines || a.fullName.localeCompare(b.fullName)),
+    byRepository: Array.from(byRepository.values()).sort((a, b) => {
+      if (a.status !== b.status) return a.status === "error" ? 1 : -1;
+      return b.source - a.source || b.lines - a.lines || b.bytes - a.bytes || a.fullName.localeCompare(b.fullName);
+    }),
     byExtension: sortedBucketEntries(byExtension).map(([name, stats]) => bucketPayload(name, stats)),
     byLanguage: sortedBucketEntries(byLanguage).map(([name, stats]) => bucketPayload(name, stats)),
     byArea: sortedBucketEntries(byArea).map(([name, stats]) => bucketPayload(name, stats)),
@@ -602,7 +629,7 @@ function writeJson(path: string, payload: unknown): void {
   writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-function writeCsv(path: string, metrics: Awaited<ReturnType<typeof buildMetrics>>): void {
+function writeCsv(path: string, stat: Awaited<ReturnType<typeof buildStat>>): void {
   mkdirSync(dirname(path), { recursive: true });
   const rows: string[] = [];
   rows.push([
@@ -619,28 +646,29 @@ function writeCsv(path: string, metrics: Awaited<ReturnType<typeof buildMetrics>
     "source",
     "doc_comment",
     "document",
+    "data",
     "test",
     "comment",
     "other",
     "test_cases",
   ].join(","));
 
-  for (const item of metrics.byOwner) {
+  for (const item of stat.byOwner) {
     rows.push(csvBucketRow("owner", item.name, "", item.name, "", item));
   }
-  for (const item of metrics.byRepository) {
+  for (const item of stat.byRepository) {
     rows.push(csvBucketRow("repository", item.owner, item.repository, item.fullName, item.githubLanguage ?? "", item));
   }
-  for (const item of metrics.byExtension) {
+  for (const item of stat.byExtension) {
     rows.push(csvBucketRow("extension", "", "", item.name, "", item));
   }
-  for (const item of metrics.byLanguage) {
+  for (const item of stat.byLanguage) {
     rows.push(csvBucketRow("language", "", "", item.name, item.name, item));
   }
-  for (const item of metrics.byArea) {
+  for (const item of stat.byArea) {
     rows.push(csvBucketRow("area", "", "", item.name, "", item));
   }
-  for (const item of metrics.byContentKind) {
+  for (const item of stat.byContentKind) {
     const stats = contentKindAsBucket(item.name, item);
     rows.push(csvBucketRow("content_kind", "", "", item.name, "", stats));
   }
@@ -674,6 +702,7 @@ function csvBucketRow(section: string, owner: string, repository: string, name: 
     stats.source,
     stats.doc_comment,
     stats.document,
+    stats.data,
     stats.test,
     stats.comment,
     stats.other,
@@ -689,13 +718,13 @@ function csvEsc(value: string): string {
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
   const outRoot = resolve(args.out);
-  const metricsDir = resolve(outRoot, "metrics");
-  const metrics = await buildMetrics(args);
-  writeJson(resolve(metricsDir, "repo_metrics.json"), metrics);
-  writeCsv(resolve(metricsDir, "repo_metrics.csv"), metrics);
-  const charts = writeStaticCharts(metrics, outRoot);
-  console.log(`Wrote ${resolve(metricsDir, "repo_metrics.json")}`);
-  console.log(`Wrote ${resolve(metricsDir, "repo_metrics.csv")}`);
+  const statDir = resolve(outRoot, "stat");
+  const stat = await buildStat(args);
+  writeJson(resolve(statDir, "repo_stat.json"), stat);
+  writeCsv(resolve(statDir, "repo_stat.csv"), stat);
+  const charts = writeStaticCharts(stat, outRoot);
+  console.log(`Wrote ${resolve(statDir, "repo_stat.json")}`);
+  console.log(`Wrote ${resolve(statDir, "repo_stat.csv")}`);
   console.log(`Wrote ${charts.length} chart files`);
   return 0;
 }

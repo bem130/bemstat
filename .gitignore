@@ -1,5 +1,5 @@
 node_modules/
 work/
-docs/metrics/repo_metrics.json
-docs/metrics/repo_metrics.csv
-docs/metrics/images/
+docs/stat/repo_stat.json
+docs/stat/repo_stat.csv
+docs/stat/images/

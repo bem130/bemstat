@@ -1,15 +1,717 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="0; url=metrics.html">
-  <title>bemstat metrics</title>
-  <script>
-    window.location.replace("metrics.html");
-  </script>
+  <title>bemstat stat</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --line: #d0d7de;
+      --text: #1f2328;
+      --muted: #57606a;
+      --blue: #1f6feb;
+      --green: #238636;
+      --yellow: #bf8700;
+      --red: #cf222e;
+      --purple: #8250df;
+      --teal: #0a7ea4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    main,
+    .header-inner {
+      width: min(1440px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .header-inner {
+      display: grid;
+      gap: 8px;
+      padding: 22px 0 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.5rem, 2vw, 2.1rem);
+      line-height: 1.15;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    main {
+      display: grid;
+      gap: 22px;
+      padding: 22px 0 40px;
+    }
+
+    section {
+      display: grid;
+      gap: 14px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .metric .value {
+      margin-top: 6px;
+      font-size: clamp(1.25rem, 2vw, 1.75rem);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      align-items: end;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    select,
+    input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--text);
+      font: inherit;
+      padding: 7px 9px;
+    }
+
+    .chart-panel,
+    .table-panel,
+    .image-grid,
+    .notice-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .chart-panel {
+      min-height: 360px;
+      overflow-x: auto;
+      padding: 12px;
+    }
+
+    .chart-panel svg {
+      min-width: 760px;
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .table-panel {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: left;
+      position: sticky;
+      left: 0;
+      background: var(--panel);
+      z-index: 1;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    tbody tr:hover td {
+      background: #f6f8fa;
+    }
+
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .image-item {
+      display: grid;
+      gap: 8px;
+    }
+
+    .image-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--text);
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 600;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .image-item h3 {
+      margin: 0;
+      font-size: 0.95rem;
+    }
+
+    .image-item img {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .notice-panel {
+      padding: 12px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 14px;
+    }
+
+    .error {
+      color: var(--red);
+      font-weight: 700;
+    }
+
+    @media (max-width: 720px) {
+      main,
+      .header-inner {
+        width: min(100% - 20px, 1440px);
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      th,
+      td {
+        padding: 7px 8px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <p><a href="metrics.html">Open metrics dashboard</a></p>
+  <header>
+    <div class="header-inner">
+      <h1>bemstat repository stat</h1>
+      <div class="meta" id="meta">loading...</div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="summary" id="summary"></div>
+    </section>
+
+    <section>
+      <h2>Interactive chart</h2>
+      <div class="controls">
+        <label>
+          Group
+          <select id="groupSelect">
+            <option value="repository">Repository</option>
+            <option value="extension">Extension</option>
+            <option value="language">Language</option>
+            <option value="content">Content kind</option>
+            <option value="owner">Owner</option>
+          </select>
+        </label>
+        <label>
+          Metric
+          <select id="metricSelect">
+            <option value="lines">Lines</option>
+            <option value="bytes">Bytes</option>
+            <option value="files">Files</option>
+            <option value="chars">Chars</option>
+            <option value="source">Source</option>
+            <option value="document">Document</option>
+            <option value="doc_comment">Doc comment</option>
+            <option value="data">Data</option>
+            <option value="test">Test</option>
+            <option value="comment">Comment</option>
+            <option value="other">Other</option>
+            <option value="testCases">Test cases</option>
+          </select>
+        </label>
+        <label id="ownerControl">
+          Owner
+          <select id="ownerSelect"></select>
+        </label>
+        <label>
+          Search
+          <input id="searchInput" type="search" autocomplete="off" placeholder="filter">
+        </label>
+        <label>
+          Sort
+          <select id="sortSelect">
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+      </div>
+      <div class="chart-panel" id="interactiveChart"></div>
+      <div class="table-panel">
+        <table>
+          <thead id="mainTableHead"></thead>
+          <tbody id="mainTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Static images</h2>
+      <div class="image-grid" id="staticImages"></div>
+      <div class="meta" id="copyStatus" aria-live="polite"></div>
+    </section>
+
+    <section class="split">
+      <div>
+        <h2>Unknown extensions</h2>
+        <div class="table-panel">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Files</th><th>Lines</th><th>Bytes</th></tr>
+            </thead>
+            <tbody id="unknownBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h2>Skipped</h2>
+        <div class="table-panel">
+          <table>
+            <thead>
+              <tr><th>File</th><th>Reason</th><th>Bytes</th></tr>
+            </thead>
+            <tbody id="skippedBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Errors</h2>
+      <div class="notice-panel" id="errorsPanel"></div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      stat: null,
+      group: "repository",
+      metric: "source",
+      owner: "all",
+      search: "",
+      sort: "desc",
+    };
+
+    const fmt = new Intl.NumberFormat("en-US");
+    const palette = ["#1f6feb", "#238636", "#bf8700", "#cf222e", "#8250df", "#0a7ea4", "#6e7781"];
+    const chartFiles = [
+      ["owners-by-source-lines", "Owners by source lines"],
+      ["top-repositories-by-source-lines", "Top repositories by source lines"],
+      ["top-extensions-by-source-lines", "Top extensions by source lines"],
+      ["top-languages-by-source-lines", "Top languages by source lines"],
+      ["content-kind-lines", "Content kind lines"],
+    ];
+
+    init().catch((error) => {
+      document.getElementById("meta").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
+    });
+
+    async function init() {
+      const response = await fetch("stat/repo_stat.json", { cache: "no-store" });
+      if (!response.ok) throw new Error(`repo_stat.json: ${response.status} ${response.statusText}`);
+      state.stat = await response.json();
+      bindControls();
+      renderAll();
+    }
+
+    function bindControls() {
+      const ownerSelect = document.getElementById("ownerSelect");
+      ownerSelect.innerHTML = [
+        `<option value="all">All owners</option>`,
+        ...state.stat.byOwner.map((item) => `<option value="${escapeAttr(item.name)}">${escapeHtml(item.name)}</option>`),
+      ].join("");
+      document.getElementById("groupSelect").value = state.group;
+      document.getElementById("metricSelect").value = state.metric;
+      document.getElementById("sortSelect").value = state.sort;
+
+      for (const [id, key] of [
+        ["groupSelect", "group"],
+        ["metricSelect", "metric"],
+        ["ownerSelect", "owner"],
+        ["sortSelect", "sort"],
+      ]) {
+        document.getElementById(id).addEventListener("change", (event) => {
+          state[key] = event.target.value;
+          syncControls();
+          renderInteractive();
+        });
+      }
+
+      document.getElementById("searchInput").addEventListener("input", (event) => {
+        state.search = event.target.value.trim().toLowerCase();
+        renderInteractive();
+      });
+
+      syncControls();
+    }
+
+    function renderAll() {
+      const generated = new Date(state.stat.generatedAt);
+      document.getElementById("meta").textContent =
+        `${state.stat.repositoryCount} repositories, generated ${generated.toLocaleString()}`;
+      renderSummary();
+      renderInteractive();
+      renderStaticImages();
+      renderUnknown();
+      renderSkipped();
+      renderErrors();
+    }
+
+    function renderSummary() {
+      const totals = state.stat.totals;
+      const items = [
+        ["Repositories", state.stat.repositoryCount],
+        ["Files", totals.files],
+        ["Lines", totals.lines],
+        ["Bytes", totals.bytes],
+        ["Source", totals.source],
+        ["Document", totals.document],
+        ["Doc comment", totals.doc_comment],
+        ["Data", totals.data],
+        ["Test", totals.test],
+        ["Test cases", totals.testCases],
+      ];
+      document.getElementById("summary").innerHTML = items.map(([label, value]) => `
+        <div class="metric">
+          <div class="label">${escapeHtml(label)}</div>
+          <div class="value">${fmt.format(value)}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderInteractive() {
+      syncControls();
+      const rows = currentRows();
+      renderChart(rows);
+      renderTable(rows);
+    }
+
+    function syncControls() {
+      const contentMetrics = new Set(["files", "lines", "chars", "bytes", "testCases"]);
+      const metricSelect = document.getElementById("metricSelect");
+      for (const option of metricSelect.options) {
+        option.disabled = state.group === "content" && !contentMetrics.has(option.value);
+      }
+      if (state.group === "content" && !contentMetrics.has(state.metric)) {
+        state.metric = "lines";
+        metricSelect.value = state.metric;
+      }
+
+      const ownerControl = document.getElementById("ownerControl");
+      const ownerSelect = document.getElementById("ownerSelect");
+      const repositoryMode = state.group === "repository";
+      ownerControl.style.display = repositoryMode ? "grid" : "none";
+      ownerSelect.disabled = !repositoryMode;
+      if (!repositoryMode && state.owner !== "all") {
+        state.owner = "all";
+        ownerSelect.value = "all";
+      }
+    }
+
+    function currentRows() {
+      const table = tableForGroup(state.group);
+      let rows = table.map((item) => ({
+        name: item.fullName || item.name,
+        owner: item.owner || "",
+        files: number(item.files),
+        lines: number(item.lines),
+        chars: number(item.chars),
+        bytes: number(item.bytes),
+        blank: number(item.blank),
+        source: number(item.source),
+        doc_comment: number(item.doc_comment),
+        document: number(item.document),
+        data: number(item.data),
+        test: number(item.test),
+        comment: number(item.comment),
+        other: number(item.other),
+        testCases: number(item.testCases),
+        status: item.status || "ok",
+      }));
+
+      if (state.owner !== "all" && state.group === "repository") {
+        rows = rows.filter((row) => row.owner === state.owner);
+      }
+
+      if (state.search.length > 0) {
+        rows = rows.filter((row) => row.name.toLowerCase().includes(state.search));
+      }
+
+      if (state.sort === "name") {
+        rows.sort((a, b) => unknownLast(a, b) || a.name.localeCompare(b.name));
+      } else {
+        const direction = state.sort === "asc" ? 1 : -1;
+        rows.sort((a, b) => unknownLast(a, b) || direction * (number(a[state.metric]) - number(b[state.metric])) || a.name.localeCompare(b.name));
+      }
+
+      return rows;
+    }
+
+    function tableForGroup(group) {
+      if (group === "owner") return state.stat.byOwner;
+      if (group === "extension") return state.stat.byExtension;
+      if (group === "language") return state.stat.byLanguage;
+      if (group === "content") return state.stat.byContentKind;
+      return state.stat.byRepository;
+    }
+
+    function renderChart(rows) {
+      const visible = rows.filter((row) => number(row[state.metric]) > 0).slice(0, 24);
+      const width = 1160;
+      const rowHeight = 30;
+      const left = 280;
+      const right = 170;
+      const top = 32;
+      const height = Math.max(180, top + 28 + visible.length * rowHeight);
+      const chartWidth = width - left - right;
+      const max = Math.max(1, ...visible.map((row) => number(row[state.metric])));
+      const bars = visible.map((row, index) => {
+        const value = number(row[state.metric]);
+        const y = top + index * rowHeight;
+        const barWidth = Math.max(1, Math.round((value / max) * chartWidth));
+        const color = palette[index % palette.length];
+        return `
+          <text x="${left - 12}" y="${y + 20}" text-anchor="end" fill="#24292f" font-size="13">${escapeHtml(truncate(row.name, 34))}</text>
+          <rect x="${left}" y="${y + 6}" width="${barWidth}" height="18" rx="3" fill="${color}"></rect>
+          <text x="${left + barWidth + 9}" y="${y + 20}" fill="#57606a" font-size="12">${fmt.format(value)}</text>
+        `;
+      }).join("");
+      document.getElementById("interactiveChart").innerHTML = `
+        <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img">
+          <rect width="${width}" height="${height}" fill="#ffffff"></rect>
+          <line x1="${left}" y1="20" x2="${left}" y2="${height - 24}" stroke="#d0d7de"></line>
+          ${bars}
+        </svg>
+      `;
+    }
+
+    function renderTable(rows) {
+      const columns = state.group === "content"
+        ? ["name", "files", "lines", "chars", "bytes", "testCases"]
+        : ["name", "files", "lines", "chars", "bytes", "source", "doc_comment", "document", "data", "test", "comment", "other", "testCases"];
+      document.getElementById("mainTableHead").innerHTML = `
+        <tr>${columns.map((name) => `<th>${escapeHtml(labelFor(name))}</th>`).join("")}</tr>
+      `;
+      document.getElementById("mainTableBody").innerHTML = rows.slice(0, 300).map((row) => `
+        <tr>
+          ${columns.map((name) => {
+            const value = row[name];
+            return `<td>${name === "name" ? escapeHtml(value) : fmt.format(number(value))}</td>`;
+          }).join("")}
+        </tr>
+      `).join("");
+    }
+
+    function renderStaticImages() {
+      document.getElementById("staticImages").innerHTML = chartFiles.map(([id, title]) => `
+        <div class="image-item">
+          <h3>${escapeHtml(title)}</h3>
+          <picture>
+            <source srcset="stat/images/${id}.svg" type="image/svg+xml">
+            <img src="stat/images/${id}.png" alt="${escapeAttr(title)}" loading="lazy">
+          </picture>
+          <div class="image-actions">
+            <button type="button" data-copy-url="stat/images/${id}.svg">Copy SVG URL</button>
+            <button type="button" data-copy-url="stat/images/${id}.png">Copy PNG URL</button>
+          </div>
+        </div>
+      `).join("");
+      for (const button of document.querySelectorAll("[data-copy-url]")) {
+        button.addEventListener("click", () => copyAssetUrl(button.getAttribute("data-copy-url")));
+      }
+    }
+
+    async function copyAssetUrl(path) {
+      const url = new URL(path, window.location.href).href;
+      try {
+        await navigator.clipboard.writeText(url);
+        document.getElementById("copyStatus").textContent = `Copied: ${url}`;
+      } catch {
+        document.getElementById("copyStatus").textContent = url;
+      }
+    }
+
+    function renderUnknown() {
+      const rows = state.stat.unknownExtensions || [];
+      document.getElementById("unknownBody").innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.name)}</td>
+          <td>${fmt.format(number(row.files))}</td>
+          <td>${fmt.format(number(row.lines))}</td>
+          <td>${fmt.format(number(row.bytes))}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderSkipped() {
+      const rows = (state.stat.skipped || []).slice(0, 500);
+      document.getElementById("skippedBody").innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(`${row.owner}/${row.repository}/${row.path}`)}</td>
+          <td>${escapeHtml(row.reason)}</td>
+          <td>${fmt.format(number(row.bytes))}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderErrors() {
+      const errors = state.stat.errors || [];
+      const panel = document.getElementById("errorsPanel");
+      if (errors.length === 0) {
+        panel.textContent = "No errors";
+        return;
+      }
+      panel.innerHTML = errors.map((error) => `
+        <div class="error">${escapeHtml(`${error.owner}/${error.repository} ${error.stage}: ${error.message}`)}</div>
+      `).join("");
+    }
+
+    function number(value) {
+      return Number.isFinite(Number(value)) ? Number(value) : 0;
+    }
+
+    function unknownLast(a, b) {
+      const au = isUnknownName(a.name);
+      const bu = isUnknownName(b.name);
+      if (au === bu) return 0;
+      return au ? 1 : -1;
+    }
+
+    function isUnknownName(name) {
+      return name === "unknown" || name === "(no_ext)" || name.startsWith("unknown:");
+    }
+
+    function labelFor(name) {
+      return {
+        name: "Name",
+        files: "Files",
+        lines: "Lines",
+        bytes: "Bytes",
+        chars: "Chars",
+        source: "Source",
+        doc_comment: "Doc comment",
+        document: "Document",
+        data: "Data",
+        test: "Test",
+        comment: "Comment",
+        other: "Other",
+        testCases: "Test cases",
+      }[name] || name;
+    }
+
+    function truncate(value, length) {
+      return value.length <= length ? value : `${value.slice(0, length - 1)}...`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value);
+    }
+  </script>
 </body>
 </html>

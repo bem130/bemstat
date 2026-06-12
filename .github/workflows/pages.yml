@@ -1,4 +1,4 @@
-name: Deploy metrics dashboard
+name: Deploy stat dashboard
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate metrics
+      - name: Generate stat
         run: npm run generate
         env:
           GITHUB_TOKEN: ${{ github.token }}

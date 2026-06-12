@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Resvg } from "@resvg/resvg-js";
 
@@ -13,7 +13,7 @@ type MetricBucket = {
   test?: number;
 };
 
-type MetricsPayload = {
+type StatPayload = {
   byOwner: MetricBucket[];
   byRepository: MetricBucket[];
   byExtension: MetricBucket[];
@@ -30,10 +30,11 @@ type ChartSpec = {
 
 const PALETTE = ["#1f6feb", "#238636", "#d29922", "#cf222e", "#8250df", "#0a7ea4", "#9a6700", "#6e7781"];
 
-export function writeStaticCharts(metrics: MetricsPayload, outputRoot: string): string[] {
-  const imageDir = resolve(outputRoot, "metrics", "images");
+export function writeStaticCharts(stat: StatPayload, outputRoot: string): string[] {
+  const imageDir = resolve(outputRoot, "stat", "images");
+  rmSync(imageDir, { recursive: true, force: true });
   mkdirSync(imageDir, { recursive: true });
-  const specs = chartSpecs(metrics);
+  const specs = chartSpecs(stat);
   const written: string[] = [];
 
   for (const spec of specs) {
@@ -48,36 +49,36 @@ export function writeStaticCharts(metrics: MetricsPayload, outputRoot: string): 
   return written;
 }
 
-function chartSpecs(metrics: MetricsPayload): ChartSpec[] {
+function chartSpecs(stat: StatPayload): ChartSpec[] {
   return [
     {
-      id: "owners-by-lines",
-      title: "Lines by Owner",
-      rows: topRows(metrics.byOwner, "lines", 10),
-      unit: "lines",
+      id: "owners-by-source-lines",
+      title: "Source Lines by Owner",
+      rows: topRows(stat.byOwner, "source", 10),
+      unit: "source lines",
     },
     {
-      id: "top-repositories-by-lines",
-      title: "Top Repositories by Lines",
-      rows: topRows(metrics.byRepository, "lines", 15, (item) => item.fullName ?? item.name ?? ""),
-      unit: "lines",
+      id: "top-repositories-by-source-lines",
+      title: "Top Repositories by Source Lines",
+      rows: topRows(stat.byRepository, "source", 15, (item) => item.fullName ?? item.name ?? ""),
+      unit: "source lines",
     },
     {
-      id: "top-extensions-by-lines",
-      title: "Top Extensions by Lines",
-      rows: topRows(metrics.byExtension, "lines", 15),
-      unit: "lines",
+      id: "top-extensions-by-source-lines",
+      title: "Top Extensions by Source Lines",
+      rows: topRows(stat.byExtension, "source", 15),
+      unit: "source lines",
     },
     {
-      id: "top-languages-by-lines",
-      title: "Top Languages by Lines",
-      rows: topRows(metrics.byLanguage, "lines", 15),
-      unit: "lines",
+      id: "top-languages-by-source-lines",
+      title: "Top Languages by Source Lines",
+      rows: topRows(stat.byLanguage, "source", 15),
+      unit: "source lines",
     },
     {
       id: "content-kind-lines",
       title: "Lines by Content Kind",
-      rows: topRows(metrics.byContentKind, "lines", 10),
+      rows: topRows(stat.byContentKind, "lines", 10),
       unit: "lines",
     },
   ];
@@ -85,15 +86,22 @@ function chartSpecs(metrics: MetricsPayload): ChartSpec[] {
 
 function topRows(
   buckets: MetricBucket[],
-  metric: keyof Pick<MetricBucket, "files" | "lines" | "bytes">,
+  metric: keyof Pick<MetricBucket, "files" | "lines" | "bytes" | "source">,
   limit: number,
   label = (item: MetricBucket) => item.name ?? item.fullName ?? "",
 ): Array<{ label: string; value: number }> {
   return [...buckets]
     .map((item) => ({ label: label(item), value: Number(item[metric] ?? 0) }))
     .filter((item) => item.label.length > 0 && item.value > 0)
-    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
+    .sort((a, b) => {
+      if (isUnknownLabel(a.label) !== isUnknownLabel(b.label)) return isUnknownLabel(a.label) ? 1 : -1;
+      return b.value - a.value || a.label.localeCompare(b.label);
+    })
     .slice(0, limit);
+}
+
+function isUnknownLabel(label: string): boolean {
+  return label === "unknown" || label === "(no_ext)" || label.startsWith("unknown:");
 }
 
 function renderSvgBarChart(spec: ChartSpec): string {
@@ -129,7 +137,7 @@ function renderSvgBarChart(spec: ChartSpec): string {
   </style>
   <rect width="100%" height="100%" fill="#ffffff"/>
   <text x="32" y="42" class="title">${escapeXml(spec.title)}</text>
-  <text x="32" y="64" class="subtitle">Generated from repo_metrics.json, unit: ${escapeXml(spec.unit)}</text>
+  <text x="32" y="64" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
   <line x1="${left}" y1="${top - 8}" x2="${left}" y2="${height - bottom + 2}" class="axis"/>
   ${bars}
 </svg>

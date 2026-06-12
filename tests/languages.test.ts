@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { genericClassifier } from "../languages/generic.ts";
 import { neplClassifier } from "../languages/nepl.ts";
 import { neplMarkdownClassifier } from "../languages/nepl_markdown.ts";
 import { resolveLanguage } from "../languages/registry.ts";
@@ -100,6 +101,25 @@ function lines(input: string): TextLine[] {
   assert.equal(resolveLanguage("src/lib.rs").language.id, "rust");
   assert.equal(resolveLanguage("src/app.ts").language.id, "typescript");
   assert.equal(resolveLanguage("assets/custom.xyz").language.known, false);
+}
+
+{
+  for (const path of ["data/model.stl", "config/app.json", "layout/view.xml"]) {
+    const resolved = resolveLanguage(path);
+    const stats = genericClassifier.classify(path, lines("value\n"), resolved.context);
+    assert.equal(stats.data, 1, path);
+    assert.equal(stats.source, 0, path);
+  }
+
+  const jsonTest = resolveLanguage("tests/fixtures/case.json");
+  const jsonTestStats = genericClassifier.classify("tests/fixtures/case.json", lines("{}\n"), jsonTest.context);
+  assert.equal(jsonTestStats.data, 1);
+  assert.equal(jsonTestStats.test, 0);
+
+  const ncgTest = resolveLanguage("archive/test.ncg.test.ts_");
+  const ncgTestStats = genericClassifier.classify("archive/test.ncg.test.ts_", lines("it('x', () => {})\n"), ncgTest.context);
+  assert.equal(ncgTestStats.test, 1);
+  assert.equal(ncgTestStats.source, 0);
 }
 
 console.log("language classifier tests passed");
