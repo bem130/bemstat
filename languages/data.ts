@@ -10,7 +10,7 @@ const DATA_DEFINITIONS: readonly LanguageDefinition[] = [
   { id: "csv", name: "CSV", extensions: [".csv"] },
   { id: "tsv", name: "TSV", extensions: [".tsv"] },
   { id: "ini", name: "INI", extensions: [".ini"] },
-  { id: "config", name: "Config", suffixes: [".env", ".env.local", ".editorconfig", ".npmrc", ".prettierrc", ".eslintrc", ".babelrc", ".stylelintrc", ".studiorc"], extensions: [".config", ".settings"] },
+  { id: "config", name: "Config", suffixes: [".env", ".editorconfig", ".npmrc", ".prettierrc", ".eslintrc", ".babelrc", ".stylelintrc", ".studiorc"], suffixPrefixes: [".env."], extensions: [".config", ".settings"] },
   { id: "apache-config", name: "Apache Config", suffixes: [".htaccess"] },
   { id: "git-config", name: "Git Config", suffixes: [".gitattributes", ".gitignore"] },
   { id: "vscode-config", name: "VS Code Config", suffixes: [".vscodeignore"] },

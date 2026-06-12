@@ -146,6 +146,20 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
 
 {
   const source = [
+    "# Guide",
+    "~~~text",
+    "neplg2:test",
+    "~~~",
+  ].join("\n");
+  const stats = neplMarkdownClassifier.classify("tutorial/intro.n.md", lines(`${source}\n`), resolveLanguage("tutorial/intro.n.md").context);
+
+  assert.equal(stats.document, 4);
+  assert.equal(stats.test, 0);
+  assert.equal(stats.testCases, 0);
+}
+
+{
+  const source = [
     "neplg2:test",
     "```text",
     "neplg2:test",
@@ -155,6 +169,23 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
 
   assert.equal(stats.document, 3);
   assert.equal(stats.test, 1);
+  assert.equal(stats.testCases, 1);
+}
+
+{
+  const source = [
+    "````text",
+    "neplg2:test",
+    "````",
+    "neplg2:test",
+    "```neplg2",
+    "print 1",
+    "```",
+  ].join("\n");
+  const stats = neplMarkdownClassifier.classify("tutorial/intro.n.md", lines(`${source}\n`), resolveLanguage("tutorial/intro.n.md").context);
+
+  assert.equal(stats.document, 3);
+  assert.equal(stats.test, 4);
   assert.equal(stats.testCases, 1);
 }
 
@@ -366,6 +397,10 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
     "manifest.webmanifest",
     ".vscodeignore",
     ".env",
+    ".env.example",
+    ".env.development",
+    ".env.production",
+    ".env.test",
     ".editorconfig",
     ".npmrc",
     ".prettierrc",

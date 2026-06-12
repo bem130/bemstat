@@ -1,12 +1,18 @@
 import { addLine, addTestCase, type FileStats, type LineKind, stripLineEnding, type TextLine } from "./types.ts";
 
-export type DoctestState = "document" | "await_fence" | "in_fence" | "in_non_doctest_fence";
+type FenceMarker = "`" | "~";
+type FenceState = {
+  kind: "in_fence" | "in_non_doctest_fence";
+  marker: FenceMarker;
+  length: number;
+};
+
+export type DoctestState = "document" | "await_fence" | FenceState;
 
 const DOCTEST_META_RE = /^\s*(stdin|argv|stdout|stderr|ret|exit_code|diag_code|diag_codes|diag_span|diag_spans)\s*:\s*(.*?)\s*$/;
 const DOCTEST_RE = /^\s*neplg2:test(?:\[[^\]]+\])?\s*$/;
-const DOCTEST_FENCE_OPEN_RE = /^\s*```(?:neplg2|nepl)\s*$/;
-const DOCTEST_FENCE_CLOSE_RE = /^\s*```\s*$/;
-const FENCE_OPEN_RE = /^\s*```.*$/;
+const DOCTEST_FENCE_INFO_RE = /^(?:neplg2|nepl)\s*$/;
+const FENCE_OPEN_RE = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 
 export function classifyDoctestLine(
   stats: FileStats,
@@ -16,6 +22,7 @@ export function classifyDoctestLine(
   documentKind: Extract<LineKind, "document" | "doc_comment" | "test">,
 ): DoctestState {
   const stripped = stripLineEnding(docText);
+  const fence = parseFenceOpen(stripped);
 
   if (state === "document") {
     if (DOCTEST_RE.test(stripped)) {
@@ -23,17 +30,17 @@ export function classifyDoctestLine(
       addTestCase(stats);
       return "await_fence";
     }
-    if (FENCE_OPEN_RE.test(stripped)) {
+    if (fence !== null) {
       addLine(stats, documentKind, line);
-      return "in_non_doctest_fence";
+      return { kind: "in_non_doctest_fence", marker: fence.marker, length: fence.length };
     }
     addLine(stats, documentKind, line);
     return "document";
   }
 
-  if (state === "in_non_doctest_fence") {
+  if (typeof state === "object" && state.kind === "in_non_doctest_fence") {
     addLine(stats, documentKind, line);
-    return DOCTEST_FENCE_CLOSE_RE.test(stripped) ? "document" : "in_non_doctest_fence";
+    return isFenceClose(stripped, state) ? "document" : state;
   }
 
   if (state === "await_fence") {
@@ -41,21 +48,35 @@ export function classifyDoctestLine(
       addLine(stats, "test", line);
       return "await_fence";
     }
-    if (DOCTEST_FENCE_OPEN_RE.test(stripped)) {
+    if (fence !== null && DOCTEST_FENCE_INFO_RE.test(fence.info)) {
       addLine(stats, "test", line);
-      return "in_fence";
+      return { kind: "in_fence", marker: fence.marker, length: fence.length };
     }
-    if (FENCE_OPEN_RE.test(stripped)) {
+    if (fence !== null) {
       addLine(stats, documentKind, line);
-      return "in_non_doctest_fence";
+      return { kind: "in_non_doctest_fence", marker: fence.marker, length: fence.length };
     }
     addLine(stats, documentKind, line);
     return "document";
   }
 
   addLine(stats, "test", line);
-  if (DOCTEST_FENCE_CLOSE_RE.test(stripped)) {
-    return "document";
-  }
-  return "in_fence";
+  return typeof state === "object" && isFenceClose(stripped, state) ? "document" : state;
+}
+
+function parseFenceOpen(text: string): { marker: FenceMarker; length: number; info: string } | null {
+  const match = text.match(FENCE_OPEN_RE);
+  if (match === null) return null;
+  const fence = match[1];
+  return {
+    marker: fence[0] as FenceMarker,
+    length: fence.length,
+    info: (match[2] ?? "").trim(),
+  };
+}
+
+function isFenceClose(text: string, state: FenceState): boolean {
+  const escaped = state.marker === "`" ? "`" : "~";
+  const pattern = new RegExp(`^\\s{0,3}${escaped}{${state.length},}\\s*$`);
+  return pattern.test(text);
 }

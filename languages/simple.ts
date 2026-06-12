@@ -15,6 +15,7 @@ export type LanguageDefinition = {
   id: string;
   name: string;
   suffixes?: readonly string[];
+  suffixPrefixes?: readonly string[];
   extensions?: readonly string[];
 };
 
@@ -161,6 +162,7 @@ export function matchingDefinition(
 ): LanguageDefinition | undefined {
   return (
     definitions.find((definition) => definition.suffixes?.includes(context.suffix)) ??
+    definitions.find((definition) => definition.suffixPrefixes?.some((prefix) => context.suffix.startsWith(prefix))) ??
     definitions.find((definition) => definition.extensions?.includes(context.lastExtension))
   );
 }
