@@ -51,6 +51,7 @@
       background: var(--bg);
       color: var(--text);
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 17px;
       line-height: 1.5;
     }
 
@@ -73,13 +74,13 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(1.5rem, 2vw, 2.1rem);
+      font-size: clamp(1.8rem, 2.4vw, 2.6rem);
       line-height: 1.15;
     }
 
     .meta {
       color: var(--muted);
-      font-size: 0.95rem;
+      font-size: 1rem;
     }
 
     main {
@@ -95,7 +96,7 @@
 
     h2 {
       margin: 0;
-      font-size: 1.15rem;
+      font-size: 1.35rem;
     }
 
     .summary {
@@ -114,7 +115,7 @@
 
     .metric .label {
       color: var(--muted);
-      font-size: 0.82rem;
+      font-size: 0.92rem;
     }
 
     .metric .value {
@@ -126,7 +127,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 12px;
       align-items: end;
       border: 1px solid var(--line);
@@ -139,7 +140,7 @@
       display: grid;
       gap: 5px;
       color: var(--muted);
-      font-size: 0.82rem;
+      font-size: 0.94rem;
       font-weight: 600;
     }
 
@@ -171,7 +172,7 @@
     }
 
     .chart-panel svg {
-      min-width: 760px;
+      min-width: 900px;
       max-width: 100%;
       height: auto;
       display: block;
@@ -184,7 +185,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.9rem;
+      font-size: 1rem;
     }
 
     th,
@@ -206,7 +207,7 @@
 
     th {
       color: var(--muted);
-      font-size: 0.78rem;
+      font-size: 0.9rem;
       font-weight: 700;
       text-transform: uppercase;
     }
@@ -217,7 +218,7 @@
 
     .image-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
       gap: 12px;
       padding: 12px;
     }
@@ -243,7 +244,7 @@
       background: var(--control);
       color: var(--text);
       font: inherit;
-      font-size: 0.84rem;
+      font-size: 0.95rem;
       font-weight: 600;
       padding: 6px 10px;
     }
@@ -268,7 +269,7 @@
       border-radius: 6px;
       background: var(--control);
       color: var(--muted);
-      font-size: 0.84rem;
+      font-size: 0.95rem;
       padding: 4px 8px;
     }
 
@@ -278,7 +279,7 @@
       border: 0;
       padding: 0 2px;
       color: var(--text);
-      font-size: 0.84rem;
+      font-size: 0.95rem;
       font-weight: 600;
     }
 
@@ -290,7 +291,7 @@
 
     .image-item h3 {
       margin: 0;
-      font-size: 0.95rem;
+      font-size: 1.1rem;
     }
 
     .image-item img {
@@ -306,7 +307,7 @@
 
     .split {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
       gap: 14px;
     }
 
@@ -630,11 +631,11 @@
 
     function renderChart(rows) {
       const visible = rows.filter((row) => number(row[state.metric]) > 0).slice(0, 24);
-      const width = 1160;
-      const rowHeight = 30;
-      const left = 280;
-      const right = 170;
-      const top = 58;
+      const width = 1360;
+      const rowHeight = 40;
+      const left = 360;
+      const right = 220;
+      const top = 76;
       const height = Math.max(180, top + 28 + visible.length * rowHeight);
       const chartWidth = width - left - right;
       const max = Math.max(1, ...visible.map((row) => number(row[state.metric])));
@@ -644,16 +645,16 @@
         const barWidth = Math.max(1, Math.round((value / max) * chartWidth));
         const color = palette[index % palette.length];
         return `
-          <text x="${left - 12}" y="${y + 20}" text-anchor="end" fill="var(--text)" font-size="13">${escapeHtml(truncate(row.name, 34))}</text>
-          <rect x="${left}" y="${y + 6}" width="${barWidth}" height="18" rx="3" fill="${color}"></rect>
-          <text x="${left + barWidth + 9}" y="${y + 20}" fill="var(--muted)" font-size="12">${fmt.format(value)}</text>
+          <text x="${left - 16}" y="${y + 27}" text-anchor="end" fill="var(--text)" font-size="17">${escapeHtml(truncate(row.name, 34))}</text>
+          <rect x="${left}" y="${y + 9}" width="${barWidth}" height="24" rx="4" fill="${color}"></rect>
+          <text x="${left + barWidth + 12}" y="${y + 27}" fill="var(--muted)" font-size="16">${fmt.format(value)}</text>
         `;
       }).join("");
       document.getElementById("interactiveChart").innerHTML = `
         <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img">
           <rect width="${width}" height="${height}" fill="var(--panel)"></rect>
-          <text x="24" y="24" fill="var(--text)" font-size="14" font-weight="700">${escapeHtml(labelFor(state.metric))} by ${escapeHtml(labelFor(state.group))}</text>
-          <text x="24" y="44" fill="var(--muted)" font-size="13">Target: ${escapeHtml(truncate(targetLabel(), 120))}</text>
+          <text x="28" y="30" fill="var(--text)" font-size="20" font-weight="700">${escapeHtml(labelFor(state.metric))} by ${escapeHtml(labelFor(state.group))}</text>
+          <text x="28" y="56" fill="var(--muted)" font-size="16">Target: ${escapeHtml(truncate(targetLabel(), 120))}</text>
           <line x1="${left}" y1="${top - 12}" x2="${left}" y2="${height - 24}" stroke="var(--line)"></line>
           ${bars}
         </svg>

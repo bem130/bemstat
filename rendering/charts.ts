@@ -159,12 +159,12 @@ function isUnknownLabel(label: string): boolean {
 }
 
 function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
-  const width = 1200;
-  const rowHeight = 34;
-  const top = 100;
-  const left = 280;
-  const right = 170;
-  const bottom = 38;
+  const width = 1440;
+  const rowHeight = 44;
+  const top = 118;
+  const left = 360;
+  const right = 210;
+  const bottom = 48;
   const height = Math.max(260, top + bottom + spec.rows.length * rowHeight);
   const max = Math.max(1, ...spec.rows.map((row) => row.value));
   const chartWidth = width - left - right;
@@ -174,25 +174,25 @@ function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
     const barWidth = Math.max(1, Math.round((row.value / max) * chartWidth));
     const color = theme.palette[index % theme.palette.length];
     return [
-      `<text x="${left - 12}" y="${y + 21}" text-anchor="end" class="label">${escapeXml(truncate(row.label, 34))}</text>`,
-      `<rect x="${left}" y="${y + 6}" width="${barWidth}" height="20" rx="3" fill="${color}"/>`,
-      `<text x="${left + barWidth + 10}" y="${y + 21}" class="value">${formatNumber(row.value)}</text>`,
+      `<text x="${left - 16}" y="${y + 29}" text-anchor="end" class="label">${escapeXml(truncate(row.label, 34))}</text>`,
+      `<rect x="${left}" y="${y + 10}" width="${barWidth}" height="24" rx="4" fill="${color}"/>`,
+      `<text x="${left + barWidth + 12}" y="${y + 29}" class="value">${formatNumber(row.value)}</text>`,
     ].join("\n");
   }).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(spec.title)}">
   <style>
-    .title { font: 700 28px Arial, sans-serif; fill: ${theme.title}; }
-    .subtitle { font: 14px Arial, sans-serif; fill: ${theme.subtitle}; }
-    .label { font: 14px Arial, sans-serif; fill: ${theme.label}; }
-    .value { font: 13px Arial, sans-serif; fill: ${theme.value}; }
+    .title { font: 700 36px Arial, sans-serif; fill: ${theme.title}; }
+    .subtitle { font: 18px Arial, sans-serif; fill: ${theme.subtitle}; }
+    .label { font: 20px Arial, sans-serif; fill: ${theme.label}; }
+    .value { font: 18px Arial, sans-serif; fill: ${theme.value}; }
     .axis { stroke: ${theme.axis}; stroke-width: 1; }
   </style>
   <rect width="100%" height="100%" fill="${theme.background}"/>
-  <text x="32" y="42" class="title">${escapeXml(spec.title)}</text>
-  <text x="32" y="64" class="subtitle">Target: ${escapeXml(truncate(spec.target, 110))}</text>
-  <text x="32" y="82" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
+  <text x="36" y="48" class="title">${escapeXml(spec.title)}</text>
+  <text x="36" y="76" class="subtitle">Target: ${escapeXml(truncate(spec.target, 110))}</text>
+  <text x="36" y="100" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
   <line x1="${left}" y1="${top - 8}" x2="${left}" y2="${height - bottom + 2}" class="axis"/>
   ${bars}
 </svg>
