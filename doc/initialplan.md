@@ -193,7 +193,9 @@ dashboard には以下を含める。
 
 公開先は `bem130/bemstat` の GitHub Pages とする。
 
-`.github/workflows/pages.yml` を追加し、`main` push、`workflow_dispatch`、および GitHub Actions の cron による UTC 0:00 / 12:00 の12時間おき実行で起動できるようにする。
+`.github/workflows/pages.yml` を追加し、`main` push、`workflow_dispatch`、および GitHub Actions の schedule による JST 00:17 / 12:17 の12時間おき実行で起動できるようにする。
+
+GitHub Actions の scheduled workflow は default branch 上の workflow だけで動作し、毎時 0 分付近は混雑により遅延または drop される可能性があるため、`timezone: Asia/Tokyo` と `17 0,12 * * *` を使う。
 
 workflow では以下を行う。
 

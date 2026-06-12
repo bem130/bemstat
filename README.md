@@ -130,7 +130,9 @@ Pages workflow は `.github/workflows/pages.yml` にあります。
 
 - `main` への push
 - 手動の `workflow_dispatch`
-- UTC `0 0,12 * * *` の定期実行
+- `timezone: Asia/Tokyo` と `17 0,12 * * *` による JST 00:17 / 12:17 の定期実行
+
+GitHub Actions の schedule は default branch 上の workflow だけで動作します。また、GitHub 側の混雑により毎時 0 分付近の scheduled workflow は遅延または drop されることがあります。そのため、この workflow では 00:00 / 12:00 ちょうどではなく 00:17 / 12:17 に実行します。
 
 workflow は依存関係を install し、`npm run generate` を実行し、`docs/` を Pages artifact として upload して GitHub Pages に deploy します。
 

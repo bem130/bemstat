@@ -6,7 +6,8 @@ on:
       - main
   workflow_dispatch:
   schedule:
-    - cron: "0 0,12 * * *"
+    - cron: "17 0,12 * * *"
+      timezone: "Asia/Tokyo"
 
 permissions: {}
 
