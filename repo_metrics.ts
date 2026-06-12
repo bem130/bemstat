@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { CONTENT_KINDS, type FileStats, type LineKind, type TextLine, emptyFileStats } from "./languages/types.ts";
 import { resolveLanguage, suffixKey } from "./languages/registry.ts";
+import { writeStaticCharts } from "./rendering/charts.ts";
 
 type BinaryMode = "skip" | "bytes";
 
@@ -692,8 +693,10 @@ async function main(): Promise<number> {
   const metrics = await buildMetrics(args);
   writeJson(resolve(metricsDir, "repo_metrics.json"), metrics);
   writeCsv(resolve(metricsDir, "repo_metrics.csv"), metrics);
+  const charts = writeStaticCharts(metrics, outRoot);
   console.log(`Wrote ${resolve(metricsDir, "repo_metrics.json")}`);
   console.log(`Wrote ${resolve(metricsDir, "repo_metrics.csv")}`);
+  console.log(`Wrote ${charts.length} chart files`);
   return 0;
 }
 
