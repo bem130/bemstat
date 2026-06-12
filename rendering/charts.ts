@@ -1,5 +1,5 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, parse, relative, resolve } from "node:path";
 import { Resvg } from "@resvg/resvg-js";
 
 type MetricBucket = {
@@ -66,7 +66,13 @@ const THEMES: ChartTheme[] = [
 ];
 
 export function writeStaticCharts(stat: StatPayload, outputRoot: string): string[] {
-  const imageDir = resolve(outputRoot, "stat", "images");
+  const root = resolve(outputRoot);
+  const statDir = resolve(root, "stat");
+  const imageDir = resolve(statDir, "images");
+  assertSafeOutputRoot(root);
+  mkdirSync(root, { recursive: true });
+  mkdirSync(statDir, { recursive: true });
+  assertSafeImageDir(root, statDir, imageDir);
   rmSync(imageDir, { recursive: true, force: true });
   mkdirSync(imageDir, { recursive: true });
   const specs = chartSpecs(stat);
@@ -200,7 +206,8 @@ function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
 }
 
 function truncate(value: string, length: number): string {
-  return value.length <= length ? value : `${value.slice(0, length - 1)}...`;
+  const chars = Array.from(value);
+  return chars.length <= length ? value : `${chars.slice(0, length - 1).join("")}...`;
 }
 
 function formatNumber(value: number): string {
@@ -208,9 +215,74 @@ function formatNumber(value: number): string {
 }
 
 function escapeXml(value: string): string {
-  return value
+  return xmlSafeString(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function xmlSafeString(value: string): string {
+  let output = "";
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    if (
+      code === 0x09 ||
+      code === 0x0a ||
+      code === 0x0d ||
+      (code >= 0x20 && code <= 0xd7ff) ||
+      (code >= 0xe000 && code <= 0xfffd) ||
+      (code >= 0x10000 && code <= 0x10ffff)
+    ) {
+      output += char;
+    }
+  }
+  return output;
+}
+
+function assertSafeImageDir(root: string, statDir: string, imageDir: string): void {
+  if (root === parse(root).root) {
+    throw new Error(`refusing to use filesystem root as chart output root: ${root}`);
+  }
+  const realWorkspace = realpathSync(process.cwd());
+  const realRoot = realpathSync(root);
+  const realStatDir = realpathSync(statDir);
+  const realImageDir = existsSync(imageDir) ? realpathSync(imageDir) : resolve(realStatDir, "images");
+  if (
+    !isPathInside(realWorkspace, realRoot) ||
+    !isPathInside(realRoot, realStatDir) ||
+    !isPathInside(realRoot, realImageDir) ||
+    imageDir !== resolve(root, "stat", "images")
+  ) {
+    throw new Error(`unsafe chart image directory: ${imageDir}`);
+  }
+}
+
+function assertSafeOutputRoot(root: string): void {
+  const workspace = resolve(process.cwd());
+  const realWorkspace = realpathSync(workspace);
+  if (
+    root === parse(root).root ||
+    !isPathInside(workspace, root) ||
+    !isExistingTargetInside(realWorkspace, root)
+  ) {
+    throw new Error(`unsafe chart output root: ${root}`);
+  }
+}
+
+function isExistingTargetInside(realWorkspace: string, target: string): boolean {
+  if (existsSync(target)) return isPathInside(realWorkspace, realpathSync(target));
+
+  let parent = dirname(target);
+  while (!existsSync(parent)) {
+    const next = dirname(parent);
+    if (next === parent) return false;
+    parent = next;
+  }
+  return isPathInside(realWorkspace, realpathSync(parent));
+}
+
+function isPathInside(root: string, target: string): boolean {
+  const rel = relative(resolve(root), resolve(target));
+  return rel === "" || (rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel));
 }

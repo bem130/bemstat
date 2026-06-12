@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /// <reference types="node" />
 
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { CONTENT_KINDS, type FileStats, type LineKind, type TextLine, emptyFileStats } from "./languages/types.ts";
 import { resolveLanguage, suffixKey } from "./languages/registry.ts";
 import { writeStaticCharts } from "./rendering/charts.ts";
@@ -17,6 +18,7 @@ type Args = {
   includeForks: boolean;
   repoLimit: number | null;
   repos: string[];
+  maxOwnerPages: number;
   maxBytes: number;
   binary: BinaryMode;
 };
@@ -91,6 +93,10 @@ type UnknownExtension = BucketStats & {
 };
 
 const TOP_LEVEL_DOC_TEST_DIRS = new Set(["tests", "test", "tutorials", "doc", "docs", "examples"]);
+const GIT_COMMAND_TIMEOUT_MS = 10 * 60_000;
+const GITHUB_FETCH_TIMEOUT_MS = 60_000;
+const MAX_OWNER_REPO_PAGES = 20;
+const MAX_PUBLIC_ERROR_LENGTH = 500;
 
 function emptyBucketStats(): BucketStats {
   return {
@@ -117,6 +123,7 @@ function parseArgs(argv: string[]): Args {
     includeForks: true,
     repoLimit: null,
     repos: [],
+    maxOwnerPages: MAX_OWNER_REPO_PAGES,
     maxBytes: 5_000_000,
     binary: "skip",
     ownersSpecified: false,
@@ -144,6 +151,10 @@ function parseArgs(argv: string[]): Args {
       args.repoLimit = value;
     } else if (arg === "--repo" || arg === "--repos") {
       args.repos.push(...splitCsv(next()));
+    } else if (arg === "--max-owner-pages") {
+      const value = Number(next());
+      if (!Number.isInteger(value) || value < 1) throw new Error("--max-owner-pages must be a positive integer");
+      args.maxOwnerPages = value;
     } else if (arg === "--max-bytes") {
       const value = Number(next());
       if (!Number.isInteger(value) || value < 0) throw new Error("--max-bytes must be a non-negative integer");
@@ -178,6 +189,7 @@ function printUsage(): void {
   console.log("  --workdir <dir>             Clone cache root (default: work/repos)");
   console.log("  --include-forks <bool>      Include forked repos (default: true)");
   console.log("  --repo-limit <n>            Limit selected repos after filtering");
+  console.log(`  --max-owner-pages <n>       Maximum GitHub API pages per owner (default: ${MAX_OWNER_REPO_PAGES})`);
   console.log("  --max-bytes <n>             Skip text counting above this size; 0 disables");
   console.log("  --binary <skip|bytes>       Skip binaries or count file size only");
 }
@@ -192,27 +204,53 @@ function parseBoolean(value: string, name: string): boolean {
   throw new Error(`${name} must be true or false`);
 }
 
-async function fetchOwnerRepos(owner: string): Promise<GitHubRepo[]> {
+async function fetchOwnerRepos(owner: string, maxPages: number): Promise<GitHubRepo[]> {
   const repos: GitHubRepo[] = [];
-  for (let page = 1; ; page++) {
+  let exhausted = false;
+  for (let page = 1; page <= maxPages; page++) {
     const url = `https://api.github.com/users/${encodeURIComponent(owner)}/repos?per_page=100&page=${page}&type=owner&sort=full_name`;
-    const response = await fetch(url, { headers: githubHeaders() });
+    const response = await fetchWithTimeout(url, { headers: githubHeaders() });
     if (!response.ok) {
-      throw new Error(`GitHub API ${response.status} ${response.statusText}: ${await response.text()}`);
+      throw new Error(`GitHub API ${response.status} ${response.statusText}`);
     }
     const pageRepos = (await response.json()) as GitHubRepo[];
     repos.push(...pageRepos);
-    if (pageRepos.length < 100) break;
+    if (!hasNextPage(response.headers.get("link"))) {
+      exhausted = true;
+      break;
+    }
+  }
+  if (!exhausted) {
+    throw new Error(`GitHub API page limit reached for ${owner}; increase --max-owner-pages to scan more repositories`);
   }
   return repos;
 }
 
 async function fetchSpecificRepo(fullName: string): Promise<GitHubRepo> {
-  const response = await fetch(`https://api.github.com/repos/${fullName}`, { headers: githubHeaders() });
+  const response = await fetchWithTimeout(`https://api.github.com/repos/${encodeRepoFullName(fullName)}`, { headers: githubHeaders() });
   if (!response.ok) {
-    throw new Error(`GitHub API ${response.status} ${response.statusText}: ${await response.text()}`);
+    throw new Error(`GitHub API ${response.status} ${response.statusText}`);
   }
   return (await response.json()) as GitHubRepo;
+}
+
+function hasNextPage(linkHeader: string | null): boolean {
+  return linkHeader?.split(",").some((part) => /;\s*rel="next"(?:\s*;|$)/.test(part.trim())) ?? false;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GITHUB_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`GitHub API request timed out after ${GITHUB_FETCH_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function githubHeaders(): HeadersInit {
@@ -232,7 +270,7 @@ async function selectRepos(args: Args): Promise<GitHubRepo[]> {
   const explicitRepoNames = new Set(args.repos.map((repo) => repo.toLowerCase()));
 
   for (const owner of args.owners) {
-    for (const repo of await fetchOwnerRepos(owner)) {
+    for (const repo of await fetchOwnerRepos(owner, args.maxOwnerPages)) {
       if (!args.includeForks && repo.fork) continue;
       byName.set(repo.full_name.toLowerCase(), repo);
     }
@@ -258,9 +296,14 @@ function run(cmd: string[], cwd: string): string {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    timeout: GIT_COMMAND_TIMEOUT_MS,
   });
+  if (proc.error) {
+    throw new Error(`${commandLabel(cmd)} failed: ${publicErrorMessage(proc.error)}`);
+  }
   if (proc.status !== 0) {
-    throw new Error((proc.stderr || proc.stdout || `Command failed: ${cmd.join(" ")}`).trim());
+    const output = (proc.stderr || proc.stdout || `exit status ${proc.status}`).trim();
+    throw new Error(`${commandLabel(cmd)} failed: ${publicErrorMessage(output)}`);
   }
   return proc.stdout ?? "";
 }
@@ -283,9 +326,19 @@ function sleepMs(ms: number): void {
 }
 
 function ensureRepo(repo: GitHubRepo, workdir: string): string {
-  const ownerDir = resolve(workdir, repo.owner.login);
+  const workdirRoot = resolve(workdir);
+  mkdirSync(workdirRoot, { recursive: true });
+  const realWorkdir = realpathSync(workdirRoot);
+  const ownerDir = resolve(workdirRoot, repo.owner.login);
   const repoDir = resolve(ownerDir, repo.name);
+  if (!isPathInside(workdirRoot, repoDir)) {
+    throw new Error(`repository path escapes workdir: ${repo.full_name}`);
+  }
   mkdirSync(ownerDir, { recursive: true });
+  assertExistingPathInside(realWorkdir, ownerDir, `owner path escapes workdir: ${repo.full_name}`);
+  if (existsSync(repoDir)) {
+    assertExistingPathInside(realWorkdir, repoDir, `repository path escapes workdir: ${repo.full_name}`);
+  }
 
   if (!existsSync(repoDir)) {
     runWithRetry(["git", "clone", "--depth", "1", "--branch", repo.default_branch, repo.clone_url, repoDir], process.cwd());
@@ -305,6 +358,20 @@ function ensureRepo(repo: GitHubRepo, workdir: string): string {
 function listTrackedFiles(repoDir: string): string[] {
   const out = run(["git", "-C", repoDir, "ls-files", "-z"], process.cwd());
   return out.split("\0").map((item) => item.trim()).filter(Boolean);
+}
+
+function assertExistingPathInside(realRoot: string, target: string, message: string): void {
+  if (!existsSync(target) || isPathInside(realRoot, realpathSync(target))) return;
+  throw new Error(message);
+}
+
+function safeResolveRepoPath(repoDir: string, relPath: string): string {
+  if (isAbsolute(relPath)) throw new Error(`absolute repository path rejected: ${relPath}`);
+  const absPath = resolve(repoDir, relPath);
+  if (!isPathInside(repoDir, absPath)) {
+    throw new Error(`repository path escapes checkout: ${relPath}`);
+  }
+  return absPath;
 }
 
 function isProbablyBinary(path: string, sampleSize = 8192): boolean {
@@ -467,7 +534,13 @@ async function buildStat(args: Args) {
     }
 
     for (const relPath of files) {
-      const absPath = resolve(repoDir, relPath);
+      let absPath: string;
+      try {
+        absPath = safeResolveRepoPath(repoDir, relPath);
+      } catch (error) {
+        skipped.push(skippedRecord(repo, relPath, "unsafe_path", undefined));
+        continue;
+      }
       let size = 0;
       try {
         const stat = lstatSync(absPath);
@@ -501,7 +574,9 @@ async function buildStat(args: Args) {
         }
         const binaryStats = emptyFileStats();
         binaryStats.bytes = size;
+        binaryStats.kindBytes.data = size;
         addMeasuredFile(repoStats, totals, byOwner, byExtension, byLanguage, byArea, unknownExtensions, repo, ext, area, languageKey, !resolved.language.known, binaryStats);
+        addFileToContentKind(byContentKind, "data", binaryStats);
         continue;
       }
 
@@ -522,14 +597,7 @@ async function buildStat(args: Args) {
       addMeasuredFile(repoStats, totals, byOwner, byExtension, byLanguage, byArea, unknownExtensions, repo, ext, area, languageKey, !resolved.language.known, fileStats);
 
       for (const kind of CONTENT_KINDS) {
-        const count = fileStats[kind];
-        if (count <= 0) continue;
-        const kindBucket = ensureContentKindBucket(byContentKind, kind);
-        kindBucket.files += 1;
-        kindBucket.lines += count;
-        kindBucket.chars += fileStats.kindChars[kind];
-        kindBucket.bytes += fileStats.kindBytes[kind];
-        kindBucket.testCases += kind === "test" ? fileStats.testCases : 0;
+        addFileToContentKind(byContentKind, kind, fileStats);
       }
     }
   }
@@ -554,10 +622,7 @@ async function buildStat(args: Args) {
     })),
     totals,
     byOwner: sortedBucketEntries(byOwner).map(([name, stats]) => bucketPayload(name, stats)),
-    byRepository: Array.from(byRepository.values()).sort((a, b) => {
-      if (a.status !== b.status) return a.status === "error" ? 1 : -1;
-      return b.source - a.source || a.fullName.localeCompare(b.fullName);
-    }),
+    byRepository: sortedRepositoryMetrics(Array.from(byRepository.values())),
     byExtension: sortedBucketEntries(byExtension).map(([name, stats]) => bucketPayload(name, stats)),
     byLanguage: sortedBucketEntries(byLanguage).map(([name, stats]) => bucketPayload(name, stats)),
     byArea: sortedBucketEntries(byArea).map(([name, stats]) => bucketPayload(name, stats)),
@@ -572,6 +637,13 @@ function markRepoError(repoStats: RepoMetric, error: RepoError): void {
   repoStats.status = "error";
   repoStats.errorStage = error.stage;
   repoStats.errorMessage = error.message;
+}
+
+function sortedRepositoryMetrics(repos: RepoMetric[]): RepoMetric[] {
+  return [...repos].sort((a, b) => {
+    if (a.status !== b.status) return a.status === "error" ? 1 : -1;
+    return b.source - a.source || a.fullName.localeCompare(b.fullName);
+  });
 }
 
 function addMeasuredFile(
@@ -602,12 +674,26 @@ function addMeasuredFile(
   }
 }
 
+function addFileToContentKind(map: Map<LineKind, ContentKindStats>, kind: LineKind, stats: FileStats): void {
+  const lines = stats[kind];
+  const chars = stats.kindChars[kind];
+  const bytes = stats.kindBytes[kind];
+  if (lines <= 0 && chars <= 0 && bytes <= 0) return;
+
+  const kindBucket = ensureContentKindBucket(map, kind);
+  kindBucket.files += 1;
+  kindBucket.lines += lines;
+  kindBucket.chars += chars;
+  kindBucket.bytes += bytes;
+  kindBucket.testCases += kind === "test" ? stats.testCases : 0;
+}
+
 function errorRecord(repo: GitHubRepo, stage: string, error: unknown): RepoError {
   return {
     owner: repo.owner.login,
     repository: repo.name,
     stage,
-    message: String(error instanceof Error ? error.message : error),
+    message: publicErrorMessage(error),
   };
 }
 
@@ -669,6 +755,9 @@ function writeCsv(path: string, stat: Awaited<ReturnType<typeof buildStat>>): vo
     const stats = contentKindAsBucket(item.name, item);
     rows.push(csvBucketRow("content_kind", "", "", item.name, "", stats));
   }
+  for (const item of stat.unknownExtensions) {
+    rows.push(csvBucketRow("unknown_extension", "", "", item.name, "", item));
+  }
 
   writeFileSync(path, `${rows.join("\n")}\n`, "utf8");
 }
@@ -708,15 +797,17 @@ function csvBucketRow(section: string, owner: string, repository: string, name: 
 }
 
 function csvEsc(value: string): string {
-  if (!/[",\n\r]/.test(value)) return value;
-  return `"${value.replace(/"/g, "\"\"")}"`;
+  const safeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  if (!/[",\n\r]/.test(safeValue)) return safeValue;
+  return `"${safeValue.replace(/"/g, "\"\"")}"`;
 }
 
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
-  const outRoot = resolve(args.out);
+  const outRoot = resolveWorkspacePath(args.out, "--out");
+  const workdir = resolveWorkspacePath(args.workdir, "--workdir");
   const statDir = resolve(outRoot, "stat");
-  const stat = await buildStat(args);
+  const stat = await buildStat({ ...args, workdir });
   writeJson(resolve(statDir, "repo_stat.json"), stat);
   writeCsv(resolve(statDir, "repo_stat.csv"), stat);
   const charts = writeStaticCharts(stat, outRoot);
@@ -726,9 +817,85 @@ async function main(): Promise<number> {
   return 0;
 }
 
-try {
-  process.exitCode = await main();
-} catch (error) {
-  console.error(String(error instanceof Error ? error.message : error));
-  process.exitCode = 1;
+function resolveWorkspacePath(input: string, name: string): string {
+  const workspace = resolve(process.cwd());
+  const realWorkspace = realpathSync(workspace);
+  const target = resolve(workspace, input);
+  if (!isPathInside(workspace, target) || !isExistingTargetInside(realWorkspace, target)) {
+    throw new Error(`${name} must stay inside the workspace: ${input}`);
+  }
+  return target;
+}
+
+function isExistingTargetInside(realWorkspace: string, target: string): boolean {
+  if (existsSync(target)) return isPathInside(realWorkspace, realpathSync(target));
+
+  let parent = dirname(target);
+  while (!existsSync(parent)) {
+    const next = dirname(parent);
+    if (next === parent) return false;
+    parent = next;
+  }
+  return isPathInside(realWorkspace, realpathSync(parent));
+}
+
+function isPathInside(root: string, target: string): boolean {
+  const rel = relative(resolve(root), resolve(target));
+  return rel === "" || (rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function encodeRepoFullName(fullName: string): string {
+  const parts = fullName.split("/");
+  if (parts.length !== 2 || parts.some((part) => part.length === 0)) {
+    throw new Error(`repository must be owner/name: ${fullName}`);
+  }
+  return parts.map((part) => encodeURIComponent(part)).join("/");
+}
+
+function commandLabel(cmd: string[]): string {
+  const gitSubcommand = cmd[0] === "git" ? cmd.find((part) => ["clone", "fetch", "checkout", "ls-files", "remote"].includes(part)) : undefined;
+  return gitSubcommand ? `git ${gitSubcommand}` : cmd[0] ?? "command";
+}
+
+function publicErrorMessage(error: unknown): string {
+  const message = String(error instanceof Error ? error.message : error);
+  return redactSensitive(message).slice(0, MAX_PUBLIC_ERROR_LENGTH);
+}
+
+function redactSensitive(value: string): string {
+  let output = value;
+  if (process.env.GITHUB_TOKEN) {
+    output = output.replaceAll(process.env.GITHUB_TOKEN, "[redacted]");
+  }
+  return output
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/(https?:\/\/)[^/@\s]+@/gi, "$1[redacted]@")
+    .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[redacted]");
+}
+
+function isMainModule(): boolean {
+  return process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+export {
+  addFileToContentKind,
+  buildStat,
+  contentKindAsBucket,
+  csvEsc,
+  hasNextPage,
+  publicErrorMessage,
+  resolveWorkspacePath,
+  safeResolveRepoPath,
+  sortedBucketEntries,
+  sortedRepositoryMetrics,
+  writeCsv,
+};
+
+if (isMainModule()) {
+  try {
+    process.exitCode = await main();
+  } catch (error) {
+    console.error(publicErrorMessage(error));
+    process.exitCode = 1;
+  }
 }

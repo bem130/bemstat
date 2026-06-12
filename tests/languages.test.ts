@@ -114,6 +114,125 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
 }
 
 {
+  const source = [
+    "#[test] fn inline_test() { assert!(true); }",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.test, 1);
+  assert.equal(stats.testCases, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "/** public docs */",
+    "/* implementation note */",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.doc_comment, 1);
+  assert.equal(stats.comment, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "/*",
+    "#[test]",
+    "*/",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.comment, 3);
+  assert.equal(stats.test, 0);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "/* outer /* inner */",
+    "#[test]",
+    "*/",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.comment, 3);
+  assert.equal(stats.test, 0);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "#[test] fn keeps_region_open() { /* } */",
+    "  assert!(true);",
+    "}",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.test, 3);
+  assert.equal(stats.testCases, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "#[test] fn string_markers_do_not_open_comments() { let a = \"/*\"; let b = \"https://example.test\"; }",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.test, 1);
+  assert.equal(stats.testCases, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "#[test] fn raw_string_markers_do_not_count_braces() { let s = r#\"/* } */\"#; }",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.test, 1);
+  assert.equal(stats.testCases, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "#[test] fn multiline_string_markers_do_not_count_braces() { let s = \"",
+    "}",
+    "\"; }",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.test, 3);
+  assert.equal(stats.testCases, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const source = [
+    "#[test] fn multiline_raw_string_markers_do_not_count_braces() { let s = r#\"",
+    "}",
+    "\"#; }",
+    "fn prod() {}",
+  ].join("\n");
+  const stats = rustClassifier.classify("src/lib.rs", lines(`${source}\n`), resolveLanguage("src/lib.rs").context);
+
+  assert.equal(stats.test, 3);
+  assert.equal(stats.testCases, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
   assert.equal(resolveLanguage("src/main.nepl").language.id, "nepl");
   assert.equal(resolveLanguage("guide/tutorial.n.md").language.id, "nepl-markdown");
   assert.equal(resolveLanguage("README.md").language.id, "markdown");
