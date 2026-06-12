@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:languages": "node --experimental-strip-types tests/languages.test.ts"
+    "test:languages": "node --experimental-strip-types tests/languages.test.ts",
+    "generate": "node --experimental-strip-types repo_metrics.ts",
+    "generate:small": "node --experimental-strip-types repo_metrics.ts --repo neknaj/NEPLg2 --out docs --workdir work/repos"
   },
   "engines": {
     "node": ">=24.0.0"
