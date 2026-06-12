@@ -2,6 +2,8 @@
   "name": "bemstat",
   "version": "0.1.0",
   "private": true,
+  "author": "Bem130",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test:languages": "node --experimental-strip-types tests/languages.test.ts",
