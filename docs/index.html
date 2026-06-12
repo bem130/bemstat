@@ -236,6 +236,30 @@
       text-decoration: none;
     }
 
+    .image-size {
+      display: inline-flex;
+      grid-template-columns: none;
+      align-items: center;
+      gap: 6px;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--muted);
+      font-size: 0.84rem;
+      padding: 4px 8px;
+    }
+
+    .image-size select {
+      width: auto;
+      min-height: 26px;
+      border: 0;
+      padding: 0 2px;
+      color: var(--text);
+      font-size: 0.84rem;
+      font-weight: 600;
+    }
+
     button:hover,
     .data-file:hover {
       border-color: var(--blue);
@@ -631,24 +655,66 @@
             <img src="stat/images/${id}.png" alt="${escapeAttr(title)}" loading="lazy">
           </picture>
           <div class="image-actions">
-            <button type="button" data-copy-url="stat/images/${id}.svg">Copy SVG URL</button>
-            <button type="button" data-copy-url="stat/images/${id}.png">Copy PNG URL</button>
+            <label class="image-size">
+              Size
+              <select data-copy-size>
+                <option value="small">small</option>
+                <option value="middle" selected>middle</option>
+                <option value="large">large</option>
+              </select>
+            </label>
+            <button type="button" data-copy-kind="url" data-copy-path="stat/images/${id}.svg" data-copy-title="${escapeAttr(title)}">Copy SVG URL</button>
+            <button type="button" data-copy-kind="markdown-html" data-copy-path="stat/images/${id}.svg" data-copy-title="${escapeAttr(title)}">Copy SVG Markdown HTML</button>
+            <button type="button" data-copy-kind="html" data-copy-path="stat/images/${id}.svg" data-copy-title="${escapeAttr(title)}">Copy SVG HTML</button>
+            <button type="button" data-copy-kind="url" data-copy-path="stat/images/${id}.png" data-copy-title="${escapeAttr(title)}">Copy PNG URL</button>
+            <button type="button" data-copy-kind="markdown-html" data-copy-path="stat/images/${id}.png" data-copy-title="${escapeAttr(title)}">Copy PNG Markdown HTML</button>
+            <button type="button" data-copy-kind="html" data-copy-path="stat/images/${id}.png" data-copy-title="${escapeAttr(title)}">Copy PNG HTML</button>
           </div>
         </div>
       `).join("");
       for (const button of document.querySelectorAll("[data-copy-url]")) {
-        button.addEventListener("click", () => copyAssetUrl(button.getAttribute("data-copy-url")));
+        button.addEventListener("click", () => copyAssetReference("url", button.getAttribute("data-copy-url"), button.textContent.trim()));
+      }
+      for (const button of document.querySelectorAll("[data-copy-kind][data-copy-path]")) {
+        button.addEventListener("click", () => {
+          const size = button.closest(".image-item")?.querySelector("[data-copy-size]")?.value || "middle";
+          copyAssetReference(button.getAttribute("data-copy-kind"), button.getAttribute("data-copy-path"), button.getAttribute("data-copy-title") || "", size);
+        });
       }
     }
 
-    async function copyAssetUrl(path) {
+    async function copyAssetReference(kind, path, title, size = "middle") {
       const url = new URL(path, window.location.href).href;
+      const text = copyTextFor(kind, url, title, size);
       try {
-        await navigator.clipboard.writeText(url);
-        document.getElementById("copyStatus").textContent = `Copied: ${url}`;
+        await navigator.clipboard.writeText(text);
+        document.getElementById("copyStatus").textContent = `Copied ${copyKindLabel(kind)}: ${text}`;
       } catch {
-        document.getElementById("copyStatus").textContent = url;
+        document.getElementById("copyStatus").textContent = text;
       }
+    }
+
+    function copyTextFor(kind, url, title, size) {
+      const width = embedWidth(size);
+      if (kind === "markdown-html") return `<img src="${escapeAttr(url)}" alt="${escapeAttr(title)}" width="${width}">`;
+      if (kind === "html") return `<img src="${escapeAttr(url)}" alt="${escapeAttr(title)}" width="${width}" style="max-width: 100%; height: auto;">`;
+      return url;
+    }
+
+    function copyKindLabel(kind) {
+      return {
+        "markdown-html": "Markdown HTML",
+        html: "HTML",
+        url: "URL",
+      }[kind] || kind;
+    }
+
+    function embedWidth(size) {
+      return {
+        small: 360,
+        middle: 720,
+        large: 1080,
+      }[size] || 720;
     }
 
     function renderUnknown() {

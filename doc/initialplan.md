@@ -182,6 +182,8 @@ dashboard には以下を含める。
 - owner、repository、extension、language、content kind のフィルタ
 - files、lines、bytes、source、data、test、document などの並べ替え
 - 静的画像の閲覧セクション
+- 静的画像 SVG/PNG の URL、Markdown-compatible HTML 埋め込み、HTML 埋め込みのコピー操作
+- 埋め込み用画像サイズ `small`、`middle`、`large` の選択
 
 ## GitHub Pages デプロイ
 
