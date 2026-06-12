@@ -167,6 +167,7 @@ Markdown 系は `document` として扱う。`tests/` 配下でも JSON、XML、
 
 owner、repository、extension、language の主要ランキングは source 行数を基準にし、document や data の量で順位が上がらないようにする。
 また、`unknown`、`(no_ext)`、`unknown:*` はグラフや表の並び替えで常に末尾へ置き、1位にならないようにする。
+各グラフには対象 owner または repository を表示し、通常実行では `bem130, neknaj` のように集計対象が分かるようにする。
 
 一方で、フィルタ、並べ替え、表示対象切り替えなどのインタラクティブなグラフは dashboard 側で `repo_stat.json` を読み込んでブラウザ上で生成する。
 

@@ -521,7 +521,7 @@
     function renderAll() {
       const generated = new Date(state.stat.generatedAt);
       document.getElementById("meta").textContent =
-        `${state.stat.repositoryCount} repositories, generated ${generated.toLocaleString()}`;
+        `Target: ${targetLabel()} | ${state.stat.repositoryCount} repositories, generated ${generated.toLocaleString()}`;
       renderSummary();
       renderInteractive();
       renderStaticImages();
@@ -634,7 +634,7 @@
       const rowHeight = 30;
       const left = 280;
       const right = 170;
-      const top = 32;
+      const top = 58;
       const height = Math.max(180, top + 28 + visible.length * rowHeight);
       const chartWidth = width - left - right;
       const max = Math.max(1, ...visible.map((row) => number(row[state.metric])));
@@ -652,7 +652,9 @@
       document.getElementById("interactiveChart").innerHTML = `
         <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img">
           <rect width="${width}" height="${height}" fill="var(--panel)"></rect>
-          <line x1="${left}" y1="20" x2="${left}" y2="${height - 24}" stroke="var(--line)"></line>
+          <text x="24" y="24" fill="var(--text)" font-size="14" font-weight="700">${escapeHtml(labelFor(state.metric))} by ${escapeHtml(labelFor(state.group))}</text>
+          <text x="24" y="44" fill="var(--muted)" font-size="13">Target: ${escapeHtml(truncate(targetLabel(), 120))}</text>
+          <line x1="${left}" y1="${top - 12}" x2="${left}" y2="${height - 24}" stroke="var(--line)"></line>
           ${bars}
         </svg>
       `;
@@ -785,6 +787,16 @@
 
     function chartAssetPath(id, format, theme) {
       return `stat/images/${id}${theme === "dark" ? "-dark" : ""}.${format}`;
+    }
+
+    function targetLabel() {
+      if (state.stat?.owners?.length) return state.stat.owners.join(", ");
+      const repos = state.stat?.repositories || [];
+      if (repos.length > 0 && repos.length <= 3) {
+        return repos.map((repo) => repo.fullName || repo.name || "").filter(Boolean).join(", ");
+      }
+      if (repos.length > 0) return `${repos.length} selected repositories`;
+      return "not specified";
     }
 
     function cacheBustPath(path, version = cacheVersion()) {

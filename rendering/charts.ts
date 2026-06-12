@@ -14,6 +14,8 @@ type MetricBucket = {
 };
 
 type StatPayload = {
+  owners?: string[];
+  repositories?: Array<{ fullName?: string; name?: string }>;
   byOwner: MetricBucket[];
   byRepository: MetricBucket[];
   byExtension: MetricBucket[];
@@ -26,6 +28,7 @@ type ChartSpec = {
   title: string;
   rows: Array<{ label: string; value: number }>;
   unit: string;
+  target: string;
 };
 
 type ChartTheme = {
@@ -84,38 +87,55 @@ export function writeStaticCharts(stat: StatPayload, outputRoot: string): string
 }
 
 function chartSpecs(stat: StatPayload): ChartSpec[] {
+  const target = targetLabel(stat);
   return [
     {
       id: "owners-by-source-lines",
       title: "Source Lines by Owner",
       rows: topRows(stat.byOwner, "source", 10),
       unit: "source lines",
+      target,
     },
     {
       id: "top-repositories-by-source-lines",
       title: "Top Repositories by Source Lines",
       rows: topRows(stat.byRepository, "source", 15, (item) => item.fullName ?? item.name ?? ""),
       unit: "source lines",
+      target,
     },
     {
       id: "top-extensions-by-source-lines",
       title: "Top Extensions by Source Lines",
       rows: topRows(stat.byExtension, "source", 15),
       unit: "source lines",
+      target,
     },
     {
       id: "top-languages-by-source-lines",
       title: "Top Languages by Source Lines",
       rows: topRows(stat.byLanguage, "source", 15),
       unit: "source lines",
+      target,
     },
     {
       id: "content-kind-lines",
       title: "Lines by Content Kind",
       rows: topRows(stat.byContentKind, "lines", 10),
       unit: "lines",
+      target,
     },
   ];
+}
+
+function targetLabel(stat: StatPayload): string {
+  if (stat.owners && stat.owners.length > 0) return stat.owners.join(", ");
+  if (stat.repositories && stat.repositories.length > 0) {
+    if (stat.repositories.length <= 3) {
+      return stat.repositories.map((repo) => repo.fullName ?? repo.name ?? "").filter((name) => name.length > 0).join(", ");
+    }
+    return `${stat.repositories.length} selected repositories`;
+  }
+  return "not specified";
 }
 
 function topRows(
@@ -141,7 +161,7 @@ function isUnknownLabel(label: string): boolean {
 function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
   const width = 1200;
   const rowHeight = 34;
-  const top = 72;
+  const top = 100;
   const left = 280;
   const right = 170;
   const bottom = 38;
@@ -171,7 +191,8 @@ function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
   </style>
   <rect width="100%" height="100%" fill="${theme.background}"/>
   <text x="32" y="42" class="title">${escapeXml(spec.title)}</text>
-  <text x="32" y="64" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
+  <text x="32" y="64" class="subtitle">Target: ${escapeXml(truncate(spec.target, 110))}</text>
+  <text x="32" y="82" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
   <line x1="${left}" y1="${top - 8}" x2="${left}" y2="${height - bottom + 2}" class="axis"/>
   ${bars}
 </svg>
