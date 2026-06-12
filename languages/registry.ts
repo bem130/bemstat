@@ -1,13 +1,35 @@
+import { ilClassifier, postScriptClassifier, semicolonSourceClassifier } from "./assembly.ts";
+import { cLikeClassifier } from "./c_like.ts";
+import { customSourceClassifier } from "./custom.ts";
+import { dataClassifier } from "./data.ts";
+import { documentClassifier } from "./document.ts";
 import { genericClassifier } from "./generic.ts";
+import { grammarClassifier } from "./grammar.ts";
+import { markupClassifier } from "./markup.ts";
+import { namedFileClassifier } from "./named.ts";
 import { neplClassifier } from "./nepl.ts";
 import { neplMarkdownClassifier } from "./nepl_markdown.ts";
 import { rustClassifier } from "./rust.ts";
+import { scriptClassifier } from "./script.ts";
+import { shaderClassifier } from "./shader.ts";
 import { languageInfo, splitPath, type ClassifierContext, type LanguageClassifier, type ResolvedLanguage } from "./types.ts";
 
 export const LANGUAGE_CLASSIFIERS: readonly LanguageClassifier[] = [
   neplClassifier,
   neplMarkdownClassifier,
   rustClassifier,
+  namedFileClassifier,
+  cLikeClassifier,
+  shaderClassifier,
+  scriptClassifier,
+  customSourceClassifier,
+  semicolonSourceClassifier,
+  ilClassifier,
+  postScriptClassifier,
+  grammarClassifier,
+  markupClassifier,
+  dataClassifier,
+  documentClassifier,
   genericClassifier,
 ];
 

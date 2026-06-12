@@ -4,13 +4,30 @@ import { neplClassifier } from "../languages/nepl.ts";
 import { neplMarkdownClassifier } from "../languages/nepl_markdown.ts";
 import { resolveLanguage } from "../languages/registry.ts";
 import { rustClassifier } from "../languages/rust.ts";
-import type { TextLine } from "../languages/types.ts";
+import type { LineKind, TextLine } from "../languages/types.ts";
 
 function lines(input: string): TextLine[] {
   return input.split(/(?<=\n)/).filter((line) => line.length > 0).map((text) => ({
     text,
     rawBytes: Buffer.byteLength(text, "utf8"),
   }));
+}
+
+function classify(path: string, input = "value\n") {
+  const resolved = resolveLanguage(path);
+  return {
+    resolved,
+    stats: resolved.classifier.classify(path, lines(input), resolved.context),
+  };
+}
+
+function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): void {
+  const { resolved, stats } = classify(path, input);
+  assert.equal(resolved.language.known, true, path);
+  assert.equal(stats[kind], 1, path);
+  for (const candidate of ["source", "document", "data", "test", "comment", "doc_comment", "other"] as const) {
+    if (candidate !== kind) assert.equal(stats[candidate], 0, `${path} ${candidate}`);
+  }
 }
 
 {
@@ -107,21 +124,103 @@ function lines(input: string): TextLine[] {
 
 {
   for (const path of ["data/model.stl", "config/app.json", "layout/view.xml"]) {
-    const resolved = resolveLanguage(path);
-    const stats = genericClassifier.classify(path, lines("value\n"), resolved.context);
+    const { stats } = classify(path);
     assert.equal(stats.data, 1, path);
     assert.equal(stats.source, 0, path);
   }
 
-  const jsonTest = resolveLanguage("tests/fixtures/case.json");
-  const jsonTestStats = genericClassifier.classify("tests/fixtures/case.json", lines("{}\n"), jsonTest.context);
+  const { stats: jsonTestStats } = classify("tests/fixtures/case.json", "{}\n");
   assert.equal(jsonTestStats.data, 1);
   assert.equal(jsonTestStats.test, 0);
 
-  const ncgTest = resolveLanguage("archive/test.ncg.test.ts_");
-  const ncgTestStats = genericClassifier.classify("archive/test.ncg.test.ts_", lines("it('x', () => {})\n"), ncgTest.context);
+  const { stats: ncgTestStats } = classify("archive/test.ncg.test.ts_", "it('x', () => {})\n");
   assert.equal(ncgTestStats.test, 1);
   assert.equal(ncgTestStats.source, 0);
+}
+
+{
+  for (const path of [
+    "src/math.asm",
+    "script/run.bat",
+    "node_modules/.bin/tool.cmd",
+    "node_modules/.bin/tool",
+    "Dockerfile",
+    "makefile",
+    "postcss.config.cjs",
+    "shader/debug_pattern.frag",
+    "shader/fullscreen.vert",
+    "src/module.ll",
+    "src/goal.nl",
+    "src/code.nlac",
+    "src/target.nlpc",
+    "queries/brackets.scm",
+    "src/sample.sk",
+  ]) {
+    assertClassifiedAs(path, "source");
+  }
+
+  for (const path of [
+    ".htaccess",
+    ".idea/module.iml",
+    "config/app.ini",
+    "vendor/.keep",
+    "Platforms/Windows/app.manifest",
+    "typing/sample.ntd",
+    "UserSettings/Search.settings",
+    "manifest.webmanifest",
+    ".vscodeignore",
+    ".lightning_studio/.studiorc",
+    "font.woff2",
+    "archive/tool.zip",
+    "shader/fullscreen.vert.spv",
+  ]) {
+    assertClassifiedAs(path, "data");
+  }
+
+  assertClassifiedAs("font_data/image/1-input.pdf", "document");
+  assertClassifiedAs("LICENSE", "document");
+}
+
+{
+  const { stats: tsStats } = classify("src/app.ts", [
+    "/// public API",
+    "// implementation note",
+    "const value = 1;",
+  ].join("\n") + "\n");
+  assert.equal(tsStats.doc_comment, 1);
+  assert.equal(tsStats.comment, 1);
+  assert.equal(tsStats.source, 1);
+
+  const { stats: testStats } = classify("tests/app.ts", [
+    "/// public API",
+    "const value = 1;",
+  ].join("\n") + "\n");
+  assert.equal(testStats.test, 2);
+  assert.equal(testStats.doc_comment, 0);
+
+  const { stats: customStats } = classify("src/sample.sk", [
+    "// comment",
+    "$ (K x y) = x",
+  ].join("\n") + "\n");
+  assert.equal(customStats.comment, 1);
+  assert.equal(customStats.source, 1);
+
+  const { stats: batchStats } = classify("run.bat", [
+    "@rem note",
+    "dotnet run",
+  ].join("\n") + "\n");
+  assert.equal(batchStats.comment, 1);
+  assert.equal(batchStats.source, 1);
+}
+
+{
+  const { resolved, stats } = classify("assets/custom.xyz");
+  assert.equal(resolved.language.known, false);
+  assert.equal(resolved.classifier.id, genericClassifier.id);
+  assert.equal(stats.other, 1);
+
+  const { stats: unknownTestStats } = classify("tests/custom.xyz");
+  assert.equal(unknownTestStats.test, 1);
 }
 
 console.log("language classifier tests passed");
