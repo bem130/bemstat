@@ -28,7 +28,39 @@ type ChartSpec = {
   unit: string;
 };
 
-const PALETTE = ["#1f6feb", "#238636", "#d29922", "#cf222e", "#8250df", "#0a7ea4", "#9a6700", "#6e7781"];
+type ChartTheme = {
+  suffix: "" | "-dark";
+  background: string;
+  title: string;
+  subtitle: string;
+  label: string;
+  value: string;
+  axis: string;
+  palette: string[];
+};
+
+const THEMES: ChartTheme[] = [
+  {
+    suffix: "",
+    background: "#ffffff",
+    title: "#1f2328",
+    subtitle: "#57606a",
+    label: "#24292f",
+    value: "#57606a",
+    axis: "#d0d7de",
+    palette: ["#1f6feb", "#238636", "#d29922", "#cf222e", "#8250df", "#0a7ea4", "#9a6700", "#6e7781"],
+  },
+  {
+    suffix: "-dark",
+    background: "#0d1117",
+    title: "#f0f6fc",
+    subtitle: "#8b949e",
+    label: "#c9d1d9",
+    value: "#8b949e",
+    axis: "#30363d",
+    palette: ["#58a6ff", "#3fb950", "#d29922", "#ff7b72", "#bc8cff", "#39c5cf", "#dbab09", "#8b949e"],
+  },
+];
 
 export function writeStaticCharts(stat: StatPayload, outputRoot: string): string[] {
   const imageDir = resolve(outputRoot, "stat", "images");
@@ -38,12 +70,14 @@ export function writeStaticCharts(stat: StatPayload, outputRoot: string): string
   const written: string[] = [];
 
   for (const spec of specs) {
-    const svgPath = resolve(imageDir, `${spec.id}.svg`);
-    const pngPath = resolve(imageDir, `${spec.id}.png`);
-    const svg = renderSvgBarChart(spec);
-    writeFileSync(svgPath, svg, "utf8");
-    writeFileSync(pngPath, new Resvg(svg).render().asPng());
-    written.push(svgPath, pngPath);
+    for (const theme of THEMES) {
+      const svgPath = resolve(imageDir, `${spec.id}${theme.suffix}.svg`);
+      const pngPath = resolve(imageDir, `${spec.id}${theme.suffix}.png`);
+      const svg = renderSvgBarChart(spec, theme);
+      writeFileSync(svgPath, svg, "utf8");
+      writeFileSync(pngPath, new Resvg(svg).render().asPng());
+      written.push(svgPath, pngPath);
+    }
   }
 
   return written;
@@ -104,7 +138,7 @@ function isUnknownLabel(label: string): boolean {
   return label === "unknown" || label === "(no_ext)" || label.startsWith("unknown:");
 }
 
-function renderSvgBarChart(spec: ChartSpec): string {
+function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
   const width = 1200;
   const rowHeight = 34;
   const top = 72;
@@ -118,7 +152,7 @@ function renderSvgBarChart(spec: ChartSpec): string {
   const bars = spec.rows.map((row, index) => {
     const y = top + index * rowHeight;
     const barWidth = Math.max(1, Math.round((row.value / max) * chartWidth));
-    const color = PALETTE[index % PALETTE.length];
+    const color = theme.palette[index % theme.palette.length];
     return [
       `<text x="${left - 12}" y="${y + 21}" text-anchor="end" class="label">${escapeXml(truncate(row.label, 34))}</text>`,
       `<rect x="${left}" y="${y + 6}" width="${barWidth}" height="20" rx="3" fill="${color}"/>`,
@@ -129,13 +163,13 @@ function renderSvgBarChart(spec: ChartSpec): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(spec.title)}">
   <style>
-    .title { font: 700 28px Arial, sans-serif; fill: #1f2328; }
-    .subtitle { font: 14px Arial, sans-serif; fill: #57606a; }
-    .label { font: 14px Arial, sans-serif; fill: #24292f; }
-    .value { font: 13px Arial, sans-serif; fill: #57606a; }
-    .axis { stroke: #d0d7de; stroke-width: 1; }
+    .title { font: 700 28px Arial, sans-serif; fill: ${theme.title}; }
+    .subtitle { font: 14px Arial, sans-serif; fill: ${theme.subtitle}; }
+    .label { font: 14px Arial, sans-serif; fill: ${theme.label}; }
+    .value { font: 13px Arial, sans-serif; fill: ${theme.value}; }
+    .axis { stroke: ${theme.axis}; stroke-width: 1; }
   </style>
-  <rect width="100%" height="100%" fill="#ffffff"/>
+  <rect width="100%" height="100%" fill="${theme.background}"/>
   <text x="32" y="42" class="title">${escapeXml(spec.title)}</text>
   <text x="32" y="64" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
   <line x1="${left}" y1="${top - 8}" x2="${left}" y2="${height - bottom + 2}" class="axis"/>

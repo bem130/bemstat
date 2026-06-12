@@ -6,9 +6,12 @@
   <title>bemstat stat</title>
   <style>
     :root {
-      color-scheme: light;
+      color-scheme: light dark;
       --bg: #f6f8fa;
       --panel: #ffffff;
+      --control: #ffffff;
+      --hover: #f6f8fa;
+      --image-bg: #ffffff;
       --line: #d0d7de;
       --text: #1f2328;
       --muted: #57606a;
@@ -18,6 +21,25 @@
       --red: #cf222e;
       --purple: #8250df;
       --teal: #0a7ea4;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --panel: #161b22;
+        --control: #0d1117;
+        --hover: #21262d;
+        --image-bg: #0d1117;
+        --line: #30363d;
+        --text: #f0f6fc;
+        --muted: #8b949e;
+        --blue: #58a6ff;
+        --green: #3fb950;
+        --yellow: #d29922;
+        --red: #ff7b72;
+        --purple: #bc8cff;
+        --teal: #39c5cf;
+      }
     }
 
     * {
@@ -127,7 +149,7 @@
       min-height: 38px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #ffffff;
+      background: var(--control);
       color: var(--text);
       font: inherit;
       padding: 7px 9px;
@@ -190,7 +212,7 @@
     }
 
     tbody tr:hover td {
-      background: #f6f8fa;
+      background: var(--hover);
     }
 
     .image-grid {
@@ -218,7 +240,7 @@
       min-height: 34px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #ffffff;
+      background: var(--control);
       color: var(--text);
       font: inherit;
       font-size: 0.84rem;
@@ -244,7 +266,7 @@
       min-height: 34px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #ffffff;
+      background: var(--control);
       color: var(--muted);
       font-size: 0.84rem;
       padding: 4px 8px;
@@ -275,7 +297,7 @@
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #ffffff;
+      background: var(--image-bg);
     }
 
     .notice-panel {
@@ -326,9 +348,9 @@
     <section>
       <h2>Data files</h2>
       <div class="notice-panel data-files">
-        <a class="data-file" href="stat/repo_stat.json">repo_stat.json</a>
+        <a class="data-file" id="jsonLink" href="stat/repo_stat.json">repo_stat.json</a>
         <button type="button" data-copy-url="stat/repo_stat.json">Copy JSON URL</button>
-        <a class="data-file" href="stat/repo_stat.csv">repo_stat.csv</a>
+        <a class="data-file" id="csvLink" href="stat/repo_stat.csv">repo_stat.csv</a>
         <button type="button" data-copy-url="stat/repo_stat.csv">Copy CSV URL</button>
       </div>
       <div class="meta" id="copyStatus" aria-live="polite"></div>
@@ -436,6 +458,7 @@
       sort: "desc",
     };
 
+    const pageLoadVersion = String(Date.now());
     const fmt = new Intl.NumberFormat("en-US");
     const palette = ["#1f6feb", "#238636", "#bf8700", "#cf222e", "#8250df", "#0a7ea4", "#6e7781"];
     const chartFiles = [
@@ -451,11 +474,17 @@
     });
 
     async function init() {
-      const response = await fetch("stat/repo_stat.json", { cache: "no-store" });
+      const response = await fetch(cacheBustPath("stat/repo_stat.json", pageLoadVersion), { cache: "no-store" });
       if (!response.ok) throw new Error(`repo_stat.json: ${response.status} ${response.statusText}`);
       state.stat = await response.json();
+      refreshDataFileLinks();
       bindControls();
       renderAll();
+    }
+
+    function refreshDataFileLinks() {
+      document.getElementById("jsonLink").href = cacheBustPath("stat/repo_stat.json");
+      document.getElementById("csvLink").href = cacheBustPath("stat/repo_stat.csv");
     }
 
     function bindControls() {
@@ -615,15 +644,15 @@
         const barWidth = Math.max(1, Math.round((value / max) * chartWidth));
         const color = palette[index % palette.length];
         return `
-          <text x="${left - 12}" y="${y + 20}" text-anchor="end" fill="#24292f" font-size="13">${escapeHtml(truncate(row.name, 34))}</text>
+          <text x="${left - 12}" y="${y + 20}" text-anchor="end" fill="var(--text)" font-size="13">${escapeHtml(truncate(row.name, 34))}</text>
           <rect x="${left}" y="${y + 6}" width="${barWidth}" height="18" rx="3" fill="${color}"></rect>
-          <text x="${left + barWidth + 9}" y="${y + 20}" fill="#57606a" font-size="12">${fmt.format(value)}</text>
+          <text x="${left + barWidth + 9}" y="${y + 20}" fill="var(--muted)" font-size="12">${fmt.format(value)}</text>
         `;
       }).join("");
       document.getElementById("interactiveChart").innerHTML = `
         <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img">
-          <rect width="${width}" height="${height}" fill="#ffffff"></rect>
-          <line x1="${left}" y1="20" x2="${left}" y2="${height - 24}" stroke="#d0d7de"></line>
+          <rect width="${width}" height="${height}" fill="var(--panel)"></rect>
+          <line x1="${left}" y1="20" x2="${left}" y2="${height - 24}" stroke="var(--line)"></line>
           ${bars}
         </svg>
       `;
@@ -647,45 +676,66 @@
     }
 
     function renderStaticImages() {
-      document.getElementById("staticImages").innerHTML = chartFiles.map(([id, title]) => `
-        <div class="image-item">
-          <h3>${escapeHtml(title)}</h3>
-          <picture>
-            <source srcset="stat/images/${id}.svg" type="image/svg+xml">
-            <img src="stat/images/${id}.png" alt="${escapeAttr(title)}" loading="lazy">
-          </picture>
-          <div class="image-actions">
-            <label class="image-size">
-              Size
-              <select data-copy-size>
-                <option value="small">small</option>
-                <option value="middle" selected>middle</option>
-                <option value="large">large</option>
-              </select>
-            </label>
-            <button type="button" data-copy-kind="url" data-copy-path="stat/images/${id}.svg" data-copy-title="${escapeAttr(title)}">Copy SVG URL</button>
-            <button type="button" data-copy-kind="markdown-html" data-copy-path="stat/images/${id}.svg" data-copy-title="${escapeAttr(title)}">Copy SVG Markdown HTML</button>
-            <button type="button" data-copy-kind="html" data-copy-path="stat/images/${id}.svg" data-copy-title="${escapeAttr(title)}">Copy SVG HTML</button>
-            <button type="button" data-copy-kind="url" data-copy-path="stat/images/${id}.png" data-copy-title="${escapeAttr(title)}">Copy PNG URL</button>
-            <button type="button" data-copy-kind="markdown-html" data-copy-path="stat/images/${id}.png" data-copy-title="${escapeAttr(title)}">Copy PNG Markdown HTML</button>
-            <button type="button" data-copy-kind="html" data-copy-path="stat/images/${id}.png" data-copy-title="${escapeAttr(title)}">Copy PNG HTML</button>
+      document.getElementById("staticImages").innerHTML = chartFiles.map(([id, title]) => {
+        const lightSvg = chartAssetPath(id, "svg", "light");
+        const darkSvg = chartAssetPath(id, "svg", "dark");
+        const lightPng = chartAssetPath(id, "png", "light");
+        const darkPng = chartAssetPath(id, "png", "dark");
+        return `
+          <div class="image-item">
+            <h3>${escapeHtml(title)}</h3>
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="${escapeAttr(cacheBustPath(darkSvg))}" type="image/svg+xml">
+              <source media="(prefers-color-scheme: dark)" srcset="${escapeAttr(cacheBustPath(darkPng))}" type="image/png">
+              <source srcset="${escapeAttr(cacheBustPath(lightSvg))}" type="image/svg+xml">
+              <source srcset="${escapeAttr(cacheBustPath(lightPng))}" type="image/png">
+              <img src="${escapeAttr(cacheBustPath(lightPng))}" alt="${escapeAttr(title)}" loading="lazy">
+            </picture>
+            <div class="image-actions">
+              <label class="image-size">
+                Size
+                <select data-copy-size>
+                  <option value="small">small</option>
+                  <option value="middle" selected>middle</option>
+                  <option value="large">large</option>
+                </select>
+              </label>
+              <button type="button" data-copy-kind="url" data-copy-path="${escapeAttr(lightSvg)}" data-copy-title="${escapeAttr(title)}">Copy SVG URL</button>
+              <button type="button" data-copy-kind="url" data-copy-path="${escapeAttr(darkSvg)}" data-copy-title="${escapeAttr(title)}">Copy Dark SVG URL</button>
+              <button type="button" data-copy-kind="markdown-html" data-copy-light-path="${escapeAttr(lightSvg)}" data-copy-dark-path="${escapeAttr(darkSvg)}" data-copy-title="${escapeAttr(title)}">Copy SVG Markdown HTML</button>
+              <button type="button" data-copy-kind="html" data-copy-light-path="${escapeAttr(lightSvg)}" data-copy-dark-path="${escapeAttr(darkSvg)}" data-copy-title="${escapeAttr(title)}">Copy SVG HTML</button>
+              <button type="button" data-copy-kind="url" data-copy-path="${escapeAttr(lightPng)}" data-copy-title="${escapeAttr(title)}">Copy PNG URL</button>
+              <button type="button" data-copy-kind="url" data-copy-path="${escapeAttr(darkPng)}" data-copy-title="${escapeAttr(title)}">Copy Dark PNG URL</button>
+              <button type="button" data-copy-kind="markdown-html" data-copy-light-path="${escapeAttr(lightPng)}" data-copy-dark-path="${escapeAttr(darkPng)}" data-copy-title="${escapeAttr(title)}">Copy PNG Markdown HTML</button>
+              <button type="button" data-copy-kind="html" data-copy-light-path="${escapeAttr(lightPng)}" data-copy-dark-path="${escapeAttr(darkPng)}" data-copy-title="${escapeAttr(title)}">Copy PNG HTML</button>
+            </div>
           </div>
-        </div>
-      `).join("");
+        `;
+      }).join("");
       for (const button of document.querySelectorAll("[data-copy-url]")) {
-        button.addEventListener("click", () => copyAssetReference("url", button.getAttribute("data-copy-url"), button.textContent.trim()));
+        button.addEventListener("click", () => copyAssetReference({
+          kind: "url",
+          path: button.getAttribute("data-copy-url"),
+          title: button.textContent.trim(),
+        }));
       }
-      for (const button of document.querySelectorAll("[data-copy-kind][data-copy-path]")) {
+      for (const button of document.querySelectorAll("[data-copy-kind]")) {
         button.addEventListener("click", () => {
           const size = button.closest(".image-item")?.querySelector("[data-copy-size]")?.value || "middle";
-          copyAssetReference(button.getAttribute("data-copy-kind"), button.getAttribute("data-copy-path"), button.getAttribute("data-copy-title") || "", size);
+          copyAssetReference({
+            kind: button.getAttribute("data-copy-kind"),
+            path: button.getAttribute("data-copy-path"),
+            lightPath: button.getAttribute("data-copy-light-path"),
+            darkPath: button.getAttribute("data-copy-dark-path"),
+            title: button.getAttribute("data-copy-title") || "",
+            size,
+          });
         });
       }
     }
 
-    async function copyAssetReference(kind, path, title, size = "middle") {
-      const url = new URL(path, window.location.href).href;
-      const text = copyTextFor(kind, url, title, size);
+    async function copyAssetReference({ kind, path, lightPath, darkPath, title = "", size = "middle" }) {
+      const text = copyTextFor(kind, path, lightPath, darkPath, title, size);
       try {
         await navigator.clipboard.writeText(text);
         document.getElementById("copyStatus").textContent = `Copied ${copyKindLabel(kind)}: ${text}`;
@@ -694,11 +744,27 @@
       }
     }
 
-    function copyTextFor(kind, url, title, size) {
+    function copyTextFor(kind, path, lightPath, darkPath, title, size) {
       const width = embedWidth(size);
-      if (kind === "markdown-html") return `<img src="${escapeAttr(url)}" alt="${escapeAttr(title)}" width="${width}">`;
-      if (kind === "html") return `<img src="${escapeAttr(url)}" alt="${escapeAttr(title)}" width="${width}" style="max-width: 100%; height: auto;">`;
-      return url;
+      const lightUrl = canonicalUrl(lightPath || path);
+      const darkUrl = darkPath ? canonicalUrl(darkPath) : "";
+      if (kind === "markdown-html") return pictureSnippet(lightUrl, darkUrl, title, width, false);
+      if (kind === "html") return pictureSnippet(lightUrl, darkUrl, title, width, true);
+      return canonicalUrl(path);
+    }
+
+    function pictureSnippet(lightUrl, darkUrl, title, width, htmlStyle) {
+      if (!darkUrl) {
+        const style = htmlStyle ? ' style="max-width: 100%; height: auto;"' : "";
+        return `<img src="${escapeAttr(lightUrl)}" alt="${escapeAttr(title)}" width="${width}"${style}>`;
+      }
+      const style = htmlStyle ? ' style="max-width: 100%; height: auto;"' : "";
+      return [
+        "<picture>",
+        `  <source media="(prefers-color-scheme: dark)" srcset="${escapeAttr(darkUrl)}">`,
+        `  <img src="${escapeAttr(lightUrl)}" alt="${escapeAttr(title)}" width="${width}"${style}>`,
+        "</picture>",
+      ].join("\n");
     }
 
     function copyKindLabel(kind) {
@@ -715,6 +781,22 @@
         middle: 720,
         large: 1080,
       }[size] || 720;
+    }
+
+    function chartAssetPath(id, format, theme) {
+      return `stat/images/${id}${theme === "dark" ? "-dark" : ""}.${format}`;
+    }
+
+    function cacheBustPath(path, version = cacheVersion()) {
+      return `${path}${path.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
+    }
+
+    function cacheVersion() {
+      return state.stat?.generatedAt || pageLoadVersion;
+    }
+
+    function canonicalUrl(path) {
+      return new URL(path, window.location.href).href;
     }
 
     function renderUnknown() {

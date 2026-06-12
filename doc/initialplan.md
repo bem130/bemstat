@@ -26,9 +26,9 @@
 - `docs/index.html`
   - NEPLg2 の dashboard と同系統の静的 dashboard。
 - `docs/stat/images/*.svg`
-  - 主要グラフの静的 SVG。
+  - 主要グラフの light/dark 静的 SVG。
 - `docs/stat/images/*.png`
-  - 主要グラフの静的 PNG。
+  - 主要グラフの light/dark 静的 PNG。
 
 JSON には少なくとも以下を含める。
 
@@ -157,7 +157,7 @@ Markdown 系は `document` として扱う。`tests/` 配下でも JSON、XML、
 
 主要グラフは静的ファイルとして事前生成し、GitHub Pages へデプロイする。
 
-生成する静的画像は SVG/PNG の両方とする。
+生成する静的画像は SVG/PNG の両方とし、light theme は従来の `<chart-id>.svg` / `<chart-id>.png`、dark theme は `<chart-id>-dark.svg` / `<chart-id>-dark.png` として出力する。
 
 - `owners-by-source-lines`
 - `top-repositories-by-source-lines`
@@ -184,6 +184,9 @@ dashboard には以下を含める。
 - 静的画像の閲覧セクション
 - 静的画像 SVG/PNG の URL、Markdown-compatible HTML 埋め込み、HTML 埋め込みのコピー操作
 - 埋め込み用画像サイズ `small`、`middle`、`large` の選択
+- dashboard 表示と Markdown-compatible HTML / HTML 埋め込みは `prefers-color-scheme` により light/dark 画像を切り替える
+- GitHub Pages では PNG、SVG、JSON ごとの cache header を直接設定できないため、dashboard 内の JSON 読み込み、data file リンク、静的画像表示には version query を付けて cache-busting する
+- profile や README へコピーする URL、Markdown-compatible HTML、HTML は version query を付けない canonical URL にし、同じ URL のまま次回 deploy 後の画像更新を追えるようにする
 
 ## GitHub Pages デプロイ
 
