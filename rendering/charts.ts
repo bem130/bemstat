@@ -14,6 +14,7 @@ type MetricBucket = {
 };
 
 type StatPayload = {
+  generatedAt?: string;
   owners?: string[];
   repositories?: Array<{ fullName?: string; name?: string }>;
   byOwner: MetricBucket[];
@@ -29,6 +30,7 @@ type ChartSpec = {
   rows: Array<{ label: string; value: number }>;
   unit: string;
   target: string;
+  updatedAt: string;
 };
 
 type ChartTheme = {
@@ -94,6 +96,7 @@ export function writeStaticCharts(stat: StatPayload, outputRoot: string): string
 
 function chartSpecs(stat: StatPayload): ChartSpec[] {
   const target = targetLabel(stat);
+  const updatedAt = updatedAtLabel(stat.generatedAt);
   return [
     {
       id: "owners-by-source-lines",
@@ -101,6 +104,7 @@ function chartSpecs(stat: StatPayload): ChartSpec[] {
       rows: topRows(stat.byOwner, "source", 10),
       unit: "source lines",
       target,
+      updatedAt,
     },
     {
       id: "top-repositories-by-source-lines",
@@ -108,6 +112,7 @@ function chartSpecs(stat: StatPayload): ChartSpec[] {
       rows: topRows(stat.byRepository, "source", 15, (item) => item.fullName ?? item.name ?? ""),
       unit: "source lines",
       target,
+      updatedAt,
     },
     {
       id: "top-extensions-by-source-lines",
@@ -115,6 +120,7 @@ function chartSpecs(stat: StatPayload): ChartSpec[] {
       rows: topRows(stat.byExtension, "source", 15),
       unit: "source lines",
       target,
+      updatedAt,
     },
     {
       id: "top-languages-by-source-lines",
@@ -122,6 +128,7 @@ function chartSpecs(stat: StatPayload): ChartSpec[] {
       rows: topRows(stat.byLanguage, "source", 15),
       unit: "source lines",
       target,
+      updatedAt,
     },
     {
       id: "content-kind-lines",
@@ -129,6 +136,7 @@ function chartSpecs(stat: StatPayload): ChartSpec[] {
       rows: topRows(stat.byContentKind, "lines", 10),
       unit: "lines",
       target,
+      updatedAt,
     },
   ];
 }
@@ -142,6 +150,14 @@ function targetLabel(stat: StatPayload): string {
     return `${stat.repositories.length} selected repositories`;
   }
   return "not specified";
+}
+
+function updatedAtLabel(generatedAt: string | undefined): string {
+  if (generatedAt === undefined) return "unknown";
+  const date = new Date(generatedAt);
+  if (!Number.isFinite(date.getTime())) return "unknown";
+  const iso = date.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
 }
 
 function topRows(
@@ -167,7 +183,7 @@ function isUnknownLabel(label: string): boolean {
 function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
   const width = 1080;
   const rowHeight = 96;
-  const top = 170;
+  const top = 206;
   const marginX = 40;
   const valueColumnWidth = 320;
   const labelValueGap = 24;
@@ -206,7 +222,8 @@ function renderSvgBarChart(spec: ChartSpec, theme: ChartTheme): string {
   <rect width="100%" height="100%" fill="${theme.background}"/>
   <text x="${marginX}" y="66" class="title">${escapeXml(spec.title)}</text>
   <text x="${marginX}" y="108" class="subtitle">Target: ${escapeXml(truncate(spec.target, 64))}</text>
-  <text x="${marginX}" y="144" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
+  <text x="${marginX}" y="144" class="subtitle">Updated: ${escapeXml(spec.updatedAt)}</text>
+  <text x="${marginX}" y="180" class="subtitle">Generated from repo_stat.json, unit: ${escapeXml(spec.unit)}</text>
   <line x1="${marginX}" y1="${top - 10}" x2="${width - marginX}" y2="${top - 10}" class="axis"/>
   ${bars}
 </svg>

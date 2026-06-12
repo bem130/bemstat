@@ -181,6 +181,7 @@ function pngSize(path: string): { width: number; height: number } {
   const longRepo = "bem130/WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
   try {
     const written = writeStaticCharts({
+      generatedAt: "2026-06-12T03:04:05.000Z",
       owners: ["bem130", "neknaj"],
       byOwner: [{ name: "bem130", files: 1, lines: 100, bytes: 100, source: 100 }],
       byRepository: [{ fullName: longRepo, files: 1, lines: 1_234_567_890_123, bytes: 100, source: 1_234_567_890_123 }],
@@ -196,6 +197,7 @@ function pngSize(path: string): { width: number; height: number } {
     assert.match(svg, /<rect x="40" y="0" width="656"/);
     assert.match(svg, /\.label \{ font-size: 46px; font-weight: 700;/);
     assert.match(svg, /\.value \{ font-size: 38px; font-weight: 700;/);
+    assert.match(svg, /<text x="40" y="144" class="subtitle">Updated: 2026-06-12 03:04 UTC<\/text>/);
     assert.match(svg, /<text x="40" y="\d+" class="label" clip-path="url\(#labelClip\)">bem130\/WWWWWWWWW\.\.\.<\/text>/);
     assert.doesNotMatch(svg, new RegExp(longRepo));
     assert.match(svg, /<text x="1040" y="\d+" text-anchor="end" class="value">1,234,567,890,123<\/text>/);
