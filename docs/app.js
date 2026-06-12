@@ -11,7 +11,10 @@ const state = {
 const pageLoadVersion = String(Date.now());
 const fmt = new Intl.NumberFormat("en-US");
 const palette = ["#1f6feb", "#238636", "#bf8700", "#cf222e", "#8250df", "#0a7ea4", "#6e7781"];
+const MAX_INTERACTIVE_ROWS = 5000;
 const MAX_CHART_ROWS = 1000;
+const MAX_TABLE_ROWS = 300;
+const MAX_DETAIL_ROWS = 500;
 const SEARCH_RENDER_DEBOUNCE_MS = 120;
 let interactiveRenderTimer = 0;
 const chartFiles = [
@@ -44,7 +47,7 @@ function bindControls() {
   const ownerSelect = document.getElementById("ownerSelect");
   ownerSelect.innerHTML = [
     `<option value="all">All owners</option>`,
-    ...state.stat.byOwner.map((item) => `<option value="${escapeAttr(item.name)}">${escapeHtml(item.name)}</option>`),
+    ...state.stat.byOwner.slice(0, MAX_DETAIL_ROWS).map((item) => `<option value="${escapeAttr(item.name)}">${escapeHtml(item.name)}</option>`),
   ].join("");
   document.getElementById("groupSelect").value = state.group;
   document.getElementById("metricSelect").value = state.metric;
@@ -149,7 +152,7 @@ function syncControls() {
 }
 
 function currentRows() {
-  const table = tableForGroup(state.group);
+  const table = tableForGroup(state.group).slice(0, MAX_INTERACTIVE_ROWS);
   let rows = table.map((item) => ({
     name: item.fullName || item.name,
     owner: item.owner || "",
@@ -249,7 +252,7 @@ function renderTable(rows) {
   document.getElementById("mainTableHead").innerHTML = `
     <tr>${columns.map((name) => `<th>${escapeHtml(labelFor(name))}</th>`).join("")}</tr>
   `;
-  document.getElementById("mainTableBody").innerHTML = rows.slice(0, 300).map((row) => `
+  document.getElementById("mainTableBody").innerHTML = rows.slice(0, MAX_TABLE_ROWS).map((row) => `
     <tr>
       ${columns.map((name) => {
         const value = row[name];
@@ -411,7 +414,7 @@ function pageBaseUrl(url) {
 }
 
 function renderUnknown() {
-  const rows = state.stat.unknownExtensions || [];
+  const rows = (state.stat.unknownExtensions || []).slice(0, MAX_DETAIL_ROWS);
   document.getElementById("unknownBody").innerHTML = rows.map((row) => `
     <tr>
       <td>${escapeHtml(row.name)}</td>
@@ -423,7 +426,7 @@ function renderUnknown() {
 }
 
 function renderSkipped() {
-  const rows = (state.stat.skipped || []).slice(0, 500);
+  const rows = (state.stat.skipped || []).slice(0, MAX_DETAIL_ROWS);
   document.getElementById("skippedBody").innerHTML = rows.map((row) => `
     <tr>
       <td>${escapeHtml(`${row.owner}/${row.repository}/${row.path}`)}</td>
@@ -434,7 +437,7 @@ function renderSkipped() {
 }
 
 function renderErrors() {
-  const errors = state.stat.errors || [];
+  const errors = (state.stat.errors || []).slice(0, MAX_DETAIL_ROWS);
   const panel = document.getElementById("errorsPanel");
   if (errors.length === 0) {
     panel.textContent = "No errors";

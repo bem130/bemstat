@@ -19,6 +19,9 @@ type Args = {
   repoLimit: number | null;
   repos: string[];
   maxOwnerPages: number;
+  maxRepoSizeKb: number | null;
+  maxTrackedFiles: number | null;
+  maxScannedBytes: number | null;
   maxBytes: number;
   binary: BinaryMode;
 };
@@ -96,7 +99,20 @@ const TOP_LEVEL_DOC_TEST_DIRS = new Set(["tests", "test", "tutorials", "doc", "d
 const GIT_COMMAND_TIMEOUT_MS = 10 * 60_000;
 const GITHUB_FETCH_TIMEOUT_MS = 60_000;
 const MAX_OWNER_REPO_PAGES = 20;
+const MAX_REPO_SIZE_KB = 500_000;
+const MAX_TRACKED_FILES = 200_000;
+const MAX_SCANNED_BYTES = 1_000_000_000;
 const MAX_PUBLIC_ERROR_LENGTH = 500;
+
+class CommandFailure extends Error {
+  readonly timedOut: boolean;
+
+  constructor(message: string, timedOut = false) {
+    super(message);
+    this.name = "CommandFailure";
+    this.timedOut = timedOut;
+  }
+}
 
 function emptyBucketStats(): BucketStats {
   return {
@@ -124,6 +140,9 @@ function parseArgs(argv: string[]): Args {
     repoLimit: null,
     repos: [],
     maxOwnerPages: MAX_OWNER_REPO_PAGES,
+    maxRepoSizeKb: MAX_REPO_SIZE_KB,
+    maxTrackedFiles: MAX_TRACKED_FILES,
+    maxScannedBytes: MAX_SCANNED_BYTES,
     maxBytes: 5_000_000,
     binary: "skip",
     ownersSpecified: false,
@@ -155,6 +174,12 @@ function parseArgs(argv: string[]): Args {
       const value = Number(next());
       if (!Number.isInteger(value) || value < 1) throw new Error("--max-owner-pages must be a positive integer");
       args.maxOwnerPages = value;
+    } else if (arg === "--max-repo-size-kb") {
+      args.maxRepoSizeKb = parseNullableLimit(next(), "--max-repo-size-kb");
+    } else if (arg === "--max-tracked-files") {
+      args.maxTrackedFiles = parseNullableLimit(next(), "--max-tracked-files");
+    } else if (arg === "--max-scanned-bytes") {
+      args.maxScannedBytes = parseNullableLimit(next(), "--max-scanned-bytes");
     } else if (arg === "--max-bytes") {
       const value = Number(next());
       if (!Number.isInteger(value) || value < 0) throw new Error("--max-bytes must be a non-negative integer");
@@ -190,8 +215,17 @@ function printUsage(): void {
   console.log("  --include-forks <bool>      Include forked repos (default: true)");
   console.log("  --repo-limit <n>            Limit selected repos after filtering");
   console.log(`  --max-owner-pages <n>       Maximum GitHub API pages per owner (default: ${MAX_OWNER_REPO_PAGES})`);
+  console.log(`  --max-repo-size-kb <n>      Skip repos larger than n KiB; 0 disables (default: ${MAX_REPO_SIZE_KB})`);
+  console.log(`  --max-tracked-files <n>     Skip repos with more tracked files; 0 disables (default: ${MAX_TRACKED_FILES})`);
+  console.log(`  --max-scanned-bytes <n>     Stop reading files after total bytes; 0 disables (default: ${MAX_SCANNED_BYTES})`);
   console.log("  --max-bytes <n>             Skip text counting above this size; 0 disables");
   console.log("  --binary <skip|bytes>       Skip binaries or count file size only");
+}
+
+function parseNullableLimit(value: string, name: string): number | null {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) throw new Error(`${name} must be a non-negative integer`);
+  return parsed === 0 ? null : parsed;
 }
 
 function splitCsv(value: string): string[] {
@@ -299,11 +333,12 @@ function run(cmd: string[], cwd: string): string {
     timeout: GIT_COMMAND_TIMEOUT_MS,
   });
   if (proc.error) {
-    throw new Error(`${commandLabel(cmd)} failed: ${publicErrorMessage(proc.error)}`);
+    const timedOut = "code" in proc.error && proc.error.code === "ETIMEDOUT";
+    throw new CommandFailure(`${commandLabel(cmd)} failed: ${publicErrorMessage(proc.error)}`, timedOut);
   }
   if (proc.status !== 0) {
     const output = (proc.stderr || proc.stdout || `exit status ${proc.status}`).trim();
-    throw new Error(`${commandLabel(cmd)} failed: ${publicErrorMessage(output)}`);
+    throw new CommandFailure(`${commandLabel(cmd)} failed: ${publicErrorMessage(output)}`);
   }
   return proc.stdout ?? "";
 }
@@ -314,6 +349,7 @@ function runWithRetry(cmd: string[], cwd: string, attempts = 3): string {
     try {
       return run(cmd, cwd);
     } catch (error) {
+      if (error instanceof CommandFailure && error.timedOut) throw error;
       lastError = error;
       if (attempt < attempts) sleepMs(1000 * attempt);
     }
@@ -490,6 +526,7 @@ async function buildStat(args: Args) {
   const skipped: SkippedFile[] = [];
   const errors: RepoError[] = [];
   const maxBytes = args.maxBytes === 0 ? null : args.maxBytes;
+  let scannedBytes = 0;
 
   for (const repo of repos) {
     console.log(`Scanning ${repo.full_name}`);
@@ -513,6 +550,13 @@ async function buildStat(args: Args) {
     };
     byRepository.set(repo.full_name, repoStats);
 
+    if (args.maxRepoSizeKb !== null && repo.size > args.maxRepoSizeKb) {
+      const record = errorRecord(repo, "size-limit", `repository size ${repo.size} KiB exceeds maxRepoSizeKb ${args.maxRepoSizeKb}`);
+      markRepoError(repoStats, record);
+      errors.push(record);
+      continue;
+    }
+
     let repoDir: string;
     try {
       repoDir = ensureRepo(repo, args.workdir);
@@ -528,6 +572,13 @@ async function buildStat(args: Args) {
       files = listTrackedFiles(repoDir);
     } catch (error) {
       const record = errorRecord(repo, "list-files", error);
+      markRepoError(repoStats, record);
+      errors.push(record);
+      continue;
+    }
+
+    if (args.maxTrackedFiles !== null && files.length > args.maxTrackedFiles) {
+      const record = errorRecord(repo, "file-limit", `tracked file count ${files.length} exceeds maxTrackedFiles ${args.maxTrackedFiles}`);
       markRepoError(repoStats, record);
       errors.push(record);
       continue;
@@ -559,6 +610,10 @@ async function buildStat(args: Args) {
       const area = classifyArea(relPath);
       const resolved = resolveLanguage(relPath);
       const languageKey = resolved.language.id;
+      if (args.maxScannedBytes !== null && scannedBytes + size > args.maxScannedBytes) {
+        skipped.push(skippedRecord(repo, relPath, "total_bytes_limit", size));
+        continue;
+      }
       let binaryFile: boolean;
       try {
         binaryFile = isProbablyBinary(absPath);
@@ -572,6 +627,7 @@ async function buildStat(args: Args) {
           skipped.push(skippedRecord(repo, relPath, "binary", size));
           continue;
         }
+        scannedBytes += size;
         const binaryStats = emptyFileStats();
         binaryStats.bytes = size;
         binaryStats.kindBytes.data = size;
@@ -589,6 +645,7 @@ async function buildStat(args: Args) {
       try {
         const lines = readTextLines(absPath, maxBytes);
         fileStats = resolved.classifier.classify(relPath, lines, resolved.context);
+        scannedBytes += size;
       } catch (error) {
         skipped.push(skippedRecord(repo, relPath, error instanceof Error && error.message.includes("too large") ? "too_large" : "unreadable", size));
         continue;
@@ -806,7 +863,9 @@ async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
   const outRoot = resolveWorkspacePath(args.out, "--out");
   const workdir = resolveWorkspacePath(args.workdir, "--workdir");
+  mkdirSync(outRoot, { recursive: true });
   const statDir = resolve(outRoot, "stat");
+  assertSafeStatDir(outRoot, statDir);
   const stat = await buildStat({ ...args, workdir });
   writeJson(resolve(statDir, "repo_stat.json"), stat);
   writeCsv(resolve(statDir, "repo_stat.csv"), stat);
@@ -825,6 +884,13 @@ function resolveWorkspacePath(input: string, name: string): string {
     throw new Error(`${name} must stay inside the workspace: ${input}`);
   }
   return target;
+}
+
+function assertSafeStatDir(outRoot: string, statDir: string): void {
+  const realOutRoot = realpathSync(outRoot);
+  if (statDir !== resolve(outRoot, "stat") || !isPathInside(realOutRoot, statDir) || !isExistingTargetInside(realOutRoot, statDir)) {
+    throw new Error(`unsafe stat output directory: ${statDir}`);
+  }
 }
 
 function isExistingTargetInside(realWorkspace: string, target: string): boolean {
@@ -867,10 +933,44 @@ function redactSensitive(value: string): string {
   if (process.env.GITHUB_TOKEN) {
     output = output.replaceAll(process.env.GITHUB_TOKEN, "[redacted]");
   }
-  return output
+  output = output
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
     .replace(/(https?:\/\/)[^/@\s]+@/gi, "$1[redacted]@")
     .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[redacted]");
+  return redactLocalPaths(output);
+}
+
+function redactLocalPaths(value: string): string {
+  let output = value;
+  for (const [label, path] of localPathsToRedact()) {
+    output = replaceAllPathVariants(output, path, label);
+  }
+  return output;
+}
+
+function localPathsToRedact(): Array<[string, string]> {
+  const paths: Array<[string, string]> = [["[workspace]", process.cwd()]];
+  try {
+    paths.push(["[workspace]", realpathSync(process.cwd())]);
+  } catch {
+    // Ignore realpath failures while formatting a public error.
+  }
+  for (const [label, value] of [
+    ["[home]", process.env.HOME],
+    ["[home]", process.env.USERPROFILE],
+    ["[temp]", process.env.TMP],
+    ["[temp]", process.env.TEMP],
+  ] as const) {
+    if (value) paths.push([label, value]);
+  }
+  return paths.filter(([, path], index, all) => path.length > 0 && all.findIndex(([, candidate]) => candidate === path) === index);
+}
+
+function replaceAllPathVariants(value: string, path: string, label: string): string {
+  return value
+    .replaceAll(path, label)
+    .replaceAll(path.replace(/\\/g, "/"), label)
+    .replaceAll(path.replace(/\//g, "\\"), label);
 }
 
 function isMainModule(): boolean {
@@ -879,6 +979,7 @@ function isMainModule(): boolean {
 
 export {
   addFileToContentKind,
+  assertSafeStatDir,
   buildStat,
   contentKindAsBucket,
   csvEsc,

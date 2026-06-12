@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   addFileToContentKind,
+  assertSafeStatDir,
   csvEsc,
   hasNextPage,
   publicErrorMessage,
@@ -48,6 +49,13 @@ function bucket(overrides = {}) {
 }
 
 {
+  const message = publicErrorMessage(`target exists but is not a git repository: ${resolve("work/repos/example/repo")}`);
+
+  assert.equal(message.includes(resolve("work")), false);
+  assert.match(message, /\[workspace\]/);
+}
+
+{
   assert.equal(hasNextPage(null), false);
   assert.equal(hasNextPage("<https://api.github.com/users/example/repos?page=2>; rel=\"next\", <https://api.github.com/users/example/repos?page=3>; rel=\"last\""), true);
   assert.equal(hasNextPage("<https://api.github.com/users/example/repos?page=1>; rel=\"prev\", <https://api.github.com/users/example/repos?page=3>; rel=\"last\""), false);
@@ -63,6 +71,28 @@ function bucket(overrides = {}) {
 {
   assert.equal(resolveWorkspacePath("docs", "--out"), resolve("docs"));
   assert.throws(() => resolveWorkspacePath("../outside", "--out"), /must stay inside the workspace/);
+}
+
+{
+  mkdirSync("work", { recursive: true });
+  const root = mkdtempSync(join(resolve("work"), "stat-safe-"));
+  try {
+    assert.doesNotThrow(() => assertSafeStatDir(root, join(root, "stat")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+{
+  const root = mkdtempSync(join(resolve("work"), "stat-symlink-"));
+  const outside = mkdtempSync(join(tmpdir(), "bemstat-outside-"));
+  try {
+    symlinkSync(outside, join(root, "stat"), process.platform === "win32" ? "junction" : "dir");
+    assert.throws(() => assertSafeStatDir(root, join(root, "stat")), /unsafe stat output directory/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
 }
 
 {

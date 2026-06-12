@@ -64,6 +64,40 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
 }
 
 {
+  const { stats } = classify("src/app.ts", "/**/\nconst value = 1;\n");
+
+  assert.equal(stats.doc_comment, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const { stats } = classify("index.html", "<!---->\n<div></div>\n");
+
+  assert.equal(stats.comment, 1);
+  assert.equal(stats.source, 1);
+}
+
+{
+  const { stats } = classify("src/app.ts", "/*/\nconst value = 1;\n");
+
+  assert.equal(stats.comment, 2);
+  assert.equal(stats.source, 0);
+}
+
+{
+  const { stats } = classify("index.html", "<!-->\n<div></div>\n");
+
+  assert.equal(stats.comment, 2);
+  assert.equal(stats.source, 0);
+}
+
+{
+  assert.equal(classify("Tests/app.ts").stats.test, 1);
+  assert.equal(classify("src/__tests__/app.ts").stats.test, 1);
+  assert.equal(classify("spec/app.ts").stats.test, 1);
+}
+
+{
   const source = [
     "# Guide",
     "",

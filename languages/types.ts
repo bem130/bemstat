@@ -131,7 +131,8 @@ export function splitPath(path: string): string[] {
 export function isTestPath(path: string): boolean {
   const parts = splitPath(path);
   const basename = parts[parts.length - 1] ?? "";
-  return parts.some((part) => part === "tests" || part === "test") || /(^|[._-])(test|spec)([._-]|$)/i.test(basename);
+  const testDirs = new Set(["test", "tests", "__tests__", "spec", "specs"]);
+  return parts.some((part) => testDirs.has(part.toLowerCase())) || /(^|[._-])(test|spec)([._-]|$)/i.test(basename);
 }
 
 export function stripLineEnding(text: string): string {

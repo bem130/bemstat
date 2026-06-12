@@ -127,7 +127,7 @@ export function classifyCommentedSource(relPath: string, lines: readonly TextLin
 
     if (syntax.docBlock && trimmed.startsWith(syntax.docBlock.start)) {
       addLine(stats, "doc_comment", line);
-      if (!blockClosedOnSameLine(trimmed, syntax.docBlock.start, syntax.docBlock.end)) {
+      if (!blockClosedOnSameLine(trimmed, syntax.docBlock.start, syntax.docBlock.end, docBlockCloseOffset(syntax.docBlock.start, syntax.docBlock.end))) {
         blockKind = "doc_comment";
         blockEnd = syntax.docBlock.end;
       }
@@ -172,8 +172,12 @@ function matchesAny(patterns: readonly CommentPattern[] | undefined, text: strin
   }) ?? false;
 }
 
-function blockClosedOnSameLine(text: string, start: string, end: string): boolean {
+function blockClosedOnSameLine(text: string, start: string, end: string, closeOffset = start.length): boolean {
   const index = text.indexOf(start);
   if (index < 0) return false;
-  return text.indexOf(end, index + start.length) >= 0;
+  return text.indexOf(end, index + closeOffset) >= 0;
+}
+
+function docBlockCloseOffset(start: string, end: string): number {
+  return start === "/**" && end === "*/" ? 2 : start.length;
 }

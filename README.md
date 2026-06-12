@@ -91,6 +91,12 @@ node --experimental-strip-types repo_stat.ts --owners your-user,your-org
 node --experimental-strip-types repo_stat.ts --repo owner/repository
 ```
 
+大きな対象を扱う場合は、Actions runner の時間・ディスク使用量を抑えるために上限を調整できます。`0` を指定するとその上限を無効化します。
+
+```sh
+node --experimental-strip-types repo_stat.ts --owners your-user --max-repo-size-kb 500000 --max-tracked-files 200000 --max-scanned-bytes 1000000000
+```
+
 ## 静的グラフの埋め込み
 
 dashboard から SVG / PNG グラフの canonical URL、Markdown-compatible HTML、HTML をコピーできます。コピーされる埋め込み URL には cache-busting query を付けないため、README や profile に貼ったあとも同じ URL のまま次回 Pages deploy 後の画像更新を追えます。
