@@ -403,6 +403,16 @@
             <option value="name">Name</option>
           </select>
         </label>
+        <label>
+          Show
+          <select id="chartLimitSelect">
+            <option value="10">10 rows</option>
+            <option value="24">24 rows</option>
+            <option value="50">50 rows</option>
+            <option value="100">100 rows</option>
+            <option value="all">All rows</option>
+          </select>
+        </label>
       </div>
       <div class="chart-panel" id="interactiveChart"></div>
       <div class="table-panel">
@@ -457,6 +467,7 @@
       owner: "all",
       search: "",
       sort: "desc",
+      chartLimit: "24",
     };
 
     const pageLoadVersion = String(Date.now());
@@ -497,12 +508,14 @@
       document.getElementById("groupSelect").value = state.group;
       document.getElementById("metricSelect").value = state.metric;
       document.getElementById("sortSelect").value = state.sort;
+      document.getElementById("chartLimitSelect").value = state.chartLimit;
 
       for (const [id, key] of [
         ["groupSelect", "group"],
         ["metricSelect", "metric"],
         ["ownerSelect", "owner"],
         ["sortSelect", "sort"],
+        ["chartLimitSelect", "chartLimit"],
       ]) {
         document.getElementById(id).addEventListener("change", (event) => {
           state[key] = event.target.value;
@@ -630,7 +643,9 @@
     }
 
     function renderChart(rows) {
-      const visible = rows.filter((row) => number(row[state.metric]) > 0).slice(0, 24);
+      const candidates = rows.filter((row) => number(row[state.metric]) > 0);
+      const limit = chartLimit();
+      const visible = limit === "all" ? candidates : candidates.slice(0, limit);
       const width = 1360;
       const rowHeight = 40;
       const left = 360;
@@ -654,11 +669,22 @@
         <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img">
           <rect width="${width}" height="${height}" fill="var(--panel)"></rect>
           <text x="28" y="30" fill="var(--text)" font-size="20" font-weight="700">${escapeHtml(labelFor(state.metric))} by ${escapeHtml(labelFor(state.group))}</text>
-          <text x="28" y="56" fill="var(--muted)" font-size="16">Target: ${escapeHtml(truncate(targetLabel(), 120))}</text>
+          <text x="28" y="56" fill="var(--muted)" font-size="16">Target: ${escapeHtml(truncate(targetLabel(), 96))} | Showing ${escapeHtml(chartShowingLabel(visible.length, candidates.length))}</text>
           <line x1="${left}" y1="${top - 12}" x2="${left}" y2="${height - 24}" stroke="var(--line)"></line>
           ${bars}
         </svg>
       `;
+    }
+
+    function chartLimit() {
+      if (state.chartLimit === "all") return "all";
+      const limit = Number.parseInt(state.chartLimit, 10);
+      return Number.isFinite(limit) && limit > 0 ? limit : 24;
+    }
+
+    function chartShowingLabel(visibleCount, totalCount) {
+      if (visibleCount === totalCount) return `${fmt.format(totalCount)} rows`;
+      return `${fmt.format(visibleCount)} of ${fmt.format(totalCount)} rows`;
     }
 
     function renderTable(rows) {
