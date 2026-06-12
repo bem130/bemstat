@@ -64,6 +64,21 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
 }
 
 {
+  const source = [
+    "//:| ```text",
+    "//:| neplg2:test",
+    "//:| ```",
+    "fn main:",
+  ].join("\n");
+  const stats = neplClassifier.classify("src/sample.nepl", lines(`${source}\n`), resolveLanguage("src/sample.nepl").context);
+
+  assert.equal(stats.doc_comment, 3);
+  assert.equal(stats.test, 0);
+  assert.equal(stats.testCases, 0);
+  assert.equal(stats.source, 1);
+}
+
+{
   const { stats } = classify("src/app.ts", "/**/\nconst value = 1;\n");
 
   assert.equal(stats.doc_comment, 1);
@@ -112,6 +127,34 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
   assert.equal(stats.document, 1);
   assert.equal(stats.blank, 1);
   assert.equal(stats.test, 5);
+  assert.equal(stats.testCases, 1);
+}
+
+{
+  const source = [
+    "# Guide",
+    "```text",
+    "neplg2:test",
+    "```",
+  ].join("\n");
+  const stats = neplMarkdownClassifier.classify("tutorial/intro.n.md", lines(`${source}\n`), resolveLanguage("tutorial/intro.n.md").context);
+
+  assert.equal(stats.document, 4);
+  assert.equal(stats.test, 0);
+  assert.equal(stats.testCases, 0);
+}
+
+{
+  const source = [
+    "neplg2:test",
+    "```text",
+    "neplg2:test",
+    "```",
+  ].join("\n");
+  const stats = neplMarkdownClassifier.classify("tutorial/intro.n.md", lines(`${source}\n`), resolveLanguage("tutorial/intro.n.md").context);
+
+  assert.equal(stats.document, 3);
+  assert.equal(stats.test, 1);
   assert.equal(stats.testCases, 1);
 }
 
@@ -322,6 +365,11 @@ function assertClassifiedAs(path: string, kind: LineKind, input = "value\n"): vo
     "UserSettings/Search.settings",
     "manifest.webmanifest",
     ".vscodeignore",
+    ".env",
+    ".editorconfig",
+    ".npmrc",
+    ".prettierrc",
+    ".eslintrc",
     ".lightning_studio/.studiorc",
     "font.woff2",
     "archive/tool.zip",

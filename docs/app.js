@@ -11,6 +11,7 @@ const state = {
 const pageLoadVersion = String(Date.now());
 const fmt = new Intl.NumberFormat("en-US");
 const palette = ["#1f6feb", "#238636", "#bf8700", "#cf222e", "#8250df", "#0a7ea4", "#6e7781"];
+const MAX_STAT_JSON_BYTES = 10 * 1024 * 1024;
 const MAX_INTERACTIVE_ROWS = 5000;
 const MAX_CHART_ROWS = 1000;
 const MAX_TABLE_ROWS = 300;
@@ -32,10 +33,23 @@ init().catch((error) => {
 async function init() {
   const response = await fetch(cacheBustPath("stat/repo_stat.json", pageLoadVersion), { cache: "no-store" });
   if (!response.ok) throw new Error(`repo_stat.json: ${response.status} ${response.statusText}`);
-  state.stat = await response.json();
+  state.stat = await parseStatJson(response);
   refreshDataFileLinks();
   bindControls();
   renderAll();
+}
+
+async function parseStatJson(response) {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_STAT_JSON_BYTES) {
+    throw new Error(`repo_stat.json is too large: ${fmt.format(contentLength)} bytes`);
+  }
+
+  const text = await response.text();
+  if (text.length > MAX_STAT_JSON_BYTES) {
+    throw new Error(`repo_stat.json is too large: ${fmt.format(text.length)} characters`);
+  }
+  return JSON.parse(text);
 }
 
 function refreshDataFileLinks() {

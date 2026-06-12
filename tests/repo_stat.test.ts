@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   addFileToContentKind,
+  assertSafeGitMetadata,
   assertSafeStatDir,
+  classifyArea,
   csvEsc,
   hasNextPage,
   publicErrorMessage,
@@ -69,12 +71,52 @@ function bucket(overrides = {}) {
 }
 
 {
+  mkdirSync("work", { recursive: true });
+  const repoDir = mkdtempSync(join(resolve("work"), "git-safe-"));
+  try {
+    mkdirSync(join(repoDir, ".git"));
+    assert.doesNotThrow(() => assertSafeGitMetadata(repoDir));
+  } finally {
+    rmSync(repoDir, { recursive: true, force: true });
+  }
+}
+
+{
+  const repoDir = mkdtempSync(join(resolve("work"), "git-file-"));
+  const outsideGit = mkdtempSync(join(tmpdir(), "bemstat-gitdir-"));
+  try {
+    writeFileSync(join(repoDir, ".git"), `gitdir: ${outsideGit}\n`, "utf8");
+    assert.throws(() => assertSafeGitMetadata(repoDir), /git metadata escapes repository/);
+  } finally {
+    rmSync(repoDir, { recursive: true, force: true });
+    rmSync(outsideGit, { recursive: true, force: true });
+  }
+}
+
+{
+  const repoDir = mkdtempSync(join(resolve("work"), "git-link-"));
+  const outsideGit = mkdtempSync(join(tmpdir(), "bemstat-gitlink-"));
+  try {
+    symlinkSync(outsideGit, join(repoDir, ".git"), process.platform === "win32" ? "junction" : "dir");
+    assert.throws(() => assertSafeGitMetadata(repoDir), /git metadata escapes repository/);
+  } finally {
+    rmSync(repoDir, { recursive: true, force: true });
+    rmSync(outsideGit, { recursive: true, force: true });
+  }
+}
+
+{
   assert.equal(resolveWorkspacePath("docs", "--out"), resolve("docs"));
   assert.throws(() => resolveWorkspacePath("../outside", "--out"), /must stay inside the workspace/);
 }
 
 {
-  mkdirSync("work", { recursive: true });
+  assert.equal(classifyArea("Tests/sample.ts"), "top_level_docs_tests");
+  assert.equal(classifyArea("Docs/guide.md"), "top_level_docs_tests");
+  assert.equal(classifyArea("Lib/SRC/main.ts"), "source_tree");
+}
+
+{
   const root = mkdtempSync(join(resolve("work"), "stat-safe-"));
   try {
     assert.doesNotThrow(() => assertSafeStatDir(root, join(root, "stat")));

@@ -384,6 +384,7 @@ function ensureRepo(repo: GitHubRepo, workdir: string): string {
   if (!existsSync(resolve(repoDir, ".git"))) {
     throw new Error(`target exists but is not a git repository: ${repoDir}`);
   }
+  assertSafeGitMetadata(repoDir);
 
   run(["git", "-C", repoDir, "remote", "set-url", "origin", repo.clone_url], process.cwd());
   runWithRetry(["git", "-C", repoDir, "fetch", "--depth", "1", "origin", repo.default_branch], process.cwd());
@@ -399,6 +400,35 @@ function listTrackedFiles(repoDir: string): string[] {
 function assertExistingPathInside(realRoot: string, target: string, message: string): void {
   if (!existsSync(target) || isPathInside(realRoot, realpathSync(target))) return;
   throw new Error(message);
+}
+
+function assertSafeGitMetadata(repoDir: string): void {
+  const realRepoDir = realpathSync(repoDir);
+  const gitPath = resolve(repoDir, ".git");
+  const stat = lstatSync(gitPath);
+
+  if (stat.isDirectory() || stat.isSymbolicLink()) {
+    assertExistingPathInside(realRepoDir, gitPath, `git metadata escapes repository: ${repoDir}`);
+    return;
+  }
+
+  if (stat.isFile()) {
+    const match = readFileSync(gitPath, "utf8").match(/^gitdir:\s*(.+?)\s*$/im);
+    if (match === null) {
+      throw new Error(`unsupported git metadata file: ${repoDir}`);
+    }
+    const gitDir = resolve(dirname(gitPath), trimGitdirPath(match[1]));
+    if (!existsSync(gitDir) || !isPathInside(realRepoDir, realpathSync(gitDir))) {
+      throw new Error(`git metadata escapes repository: ${repoDir}`);
+    }
+    return;
+  }
+
+  throw new Error(`unsupported git metadata path: ${repoDir}`);
+}
+
+function trimGitdirPath(path: string): string {
+  return path.trim().replace(/^["']|["']$/g, "");
 }
 
 function safeResolveRepoPath(repoDir: string, relPath: string): string {
@@ -445,8 +475,9 @@ function readTextLines(path: string, maxBytes: number | null): TextLine[] {
 function classifyArea(relPath: string): string {
   const parts = relPath.split("/").filter(Boolean);
   if (parts.length === 0) return "other";
-  if (TOP_LEVEL_DOC_TEST_DIRS.has(parts[0])) return "top_level_docs_tests";
-  if (parts[0] === "src" || parts[0] === "stdlib" || parts.includes("src")) return "source_tree";
+  const topLevel = parts[0].toLowerCase();
+  if (TOP_LEVEL_DOC_TEST_DIRS.has(topLevel)) return "top_level_docs_tests";
+  if (topLevel === "src" || topLevel === "stdlib" || parts.some((part) => part.toLowerCase() === "src")) return "source_tree";
   return "other";
 }
 
@@ -980,7 +1011,9 @@ function isMainModule(): boolean {
 export {
   addFileToContentKind,
   assertSafeStatDir,
+  assertSafeGitMetadata,
   buildStat,
+  classifyArea,
   contentKindAsBucket,
   csvEsc,
   hasNextPage,
