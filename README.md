@@ -4,10 +4,22 @@
 
 この README には、fork して別の GitHub user、organization、repository 群を対象にした dashboard を GitHub Pages へ deploy する手順も記載しています。詳細は [fork して別 target を deploy する](#fork-して別-target-を-deploy-する) を参照してください。
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://bem130.github.io/bemstat/stat/images/top-languages-by-source-lines-dark.svg">
-  <img src="https://bem130.github.io/bemstat/stat/images/top-languages-by-source-lines.svg" alt="Top languages by source lines" width="1080">
-</picture>
+<table width="100%">
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://bem130.github.io/bemstat/stat/images/top-repositories-by-source-lines-dark.svg">
+        <img src="https://bem130.github.io/bemstat/stat/images/top-repositories-by-source-lines.svg" alt="Top repositories by source lines" width="100%">
+      </picture>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://bem130.github.io/bemstat/stat/images/top-languages-by-source-lines-dark.svg">
+        <img src="https://bem130.github.io/bemstat/stat/images/top-languages-by-source-lines.svg" alt="Top languages by source lines" width="100%">
+      </picture>
+    </td>
+  </tr>
+</table>
 
 ## リンク
 
@@ -121,6 +133,33 @@ Pages workflow は `.github/workflows/pages.yml` にあります。
 - UTC `0 0,12 * * *` の定期実行
 
 workflow は依存関係を install し、`npm run generate` を実行し、`docs/` を Pages artifact として upload して GitHub Pages に deploy します。
+
+### README 画像 cache purge
+
+Pages deploy 後に README や profile README の GitHub image cache を purge します。
+
+GitHub の `Settings` -> `Secrets and variables` -> `Actions` -> `Variables` -> `New repository variable` から、必要に応じて以下を設定できます。
+
+| Variable | 用途 |
+| --- | --- |
+| `BEMSTAT_PURGE_TARGETS` | cache purge 対象の README 一覧。未設定なら現在の repository の `README.md` を対象にします。 |
+| `BEMSTAT_PURGE_CAMO_URLS` | 直接 purge したい `https://camo.githubusercontent.com/...` URL。通常は不要です。 |
+| `BEMSTAT_PURGE_STRICT` | `true` にすると purge 失敗時に workflow を失敗させます。未設定では warning 扱いです。 |
+
+`BEMSTAT_PURGE_TARGETS` は改行または comma 区切りで指定します。
+
+```text
+README.md
+bem130/bem130@main:README.md
+neknaj/neknaj@main:README.md
+```
+
+形式:
+
+- `README.md`: 現在の repository の default branch にある `README.md`
+- `owner/repo@branch:path`: 任意 repository、branch、path の README
+
+profile README に bemstat の静的グラフを埋め込んでいる場合は、例えば `bem130/bem130@main:README.md` を `BEMSTAT_PURGE_TARGETS` に追加します。
 
 ## fork して別 target を deploy する
 

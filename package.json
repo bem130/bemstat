@@ -6,9 +6,10 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "npm run test:languages && npm run test:repo-stat",
+    "test": "npm run test:languages && npm run test:repo-stat && npm run test:purge-cache",
     "test:languages": "node --experimental-strip-types tests/languages.test.ts",
     "test:repo-stat": "node --experimental-strip-types tests/repo_stat.test.ts",
+    "test:purge-cache": "node tests/purge_camo_cache.test.mjs",
     "generate": "node --experimental-strip-types repo_stat.ts",
     "generate:small": "node --experimental-strip-types repo_stat.ts --repo neknaj/NEPLg2 --out docs --workdir work/repos"
   },
